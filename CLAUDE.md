@@ -9,15 +9,15 @@ Kariro helps job seekers manage their entire job hunt from one place. Users add 
 ## Tech Stack
 
 - **Runtime**: Node.js (v20+)
-- **Framework**: Hono (API), Next.js 15 (Frontend — App Router)
+- **Framework**: Hono (API), Next.js 16 (Frontend — App Router)
 - **Validation**: Zod + @hono/zod-openapi
 - **ORM**: Drizzle ORM (PostgreSQL)
 - **Database**: PostgreSQL 16 (Supabase in prod, Docker locally)
-- **Cache/Queue**: Redis + BullMQ
+- **Cache/Queue**: Redis + BullMQ (Upstash Redis in prod, Docker locally)
 - **AI**: Vercel AI SDK (`ai` package) with OpenAI and Anthropic providers
 - **API Docs**: Scalar (@scalar/hono-api-reference)
 - **Testing**: Vitest (API), Vitest + React Testing Library (Frontend)
-- **Frontend**: Next.js 15 (App Router, Server Components, `apps/web`)
+- **Frontend**: Next.js 16 (App Router, Server Components, `apps/web`)
 - **Styling**: Tailwind CSS + shadcn/ui
 - **Monorepo**: Turborepo
 - **Package Manager**: pnpm
@@ -57,7 +57,7 @@ kariro/
 │   │   │   ├── lib/          # Shared utilities, AI helpers, queue setup
 │   │   │   └── app.ts        # Hono app setup, middleware registration, route mounting
 │   │   └── vitest.config.ts
-│   └── web/                  # Next.js 15 frontend (App Router, runs on :3000)
+│   └── web/                  # Next.js 16 frontend (App Router, runs on :3000)
 │       ├── app/              # App Router pages and layouts
 │       │   ├── layout.tsx    # Root layout
 │       │   ├── page.tsx      # Landing page
