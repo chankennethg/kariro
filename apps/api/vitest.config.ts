@@ -4,6 +4,11 @@ import path from 'node:path';
 export default defineConfig({
   test: {
     environment: 'node',
+    env: {
+      DATABASE_URL: 'postgresql://kariro:kariro@localhost:5432/kariro_test',
+      REDIS_URL: 'redis://localhost:6379',
+      NODE_ENV: 'test',
+    },
     coverage: {
       provider: 'v8',
       thresholds: {

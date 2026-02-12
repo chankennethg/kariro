@@ -1,0 +1,16 @@
+import { pinoLogger } from 'hono-pino';
+import pino from 'pino';
+import { env } from './env.js';
+
+export function logger() {
+  return pinoLogger({
+    pino: pino({
+      level: env.NODE_ENV === 'production' ? 'info' : 'debug',
+      ...(env.NODE_ENV !== 'production' && {
+        transport: {
+          target: 'pino-pretty',
+        },
+      }),
+    }),
+  });
+}

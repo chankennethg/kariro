@@ -14,3 +14,14 @@ export interface PaginatedResponse<T> {
     readonly limit: number;
   };
 }
+
+export interface CursorPaginatedResponse<T> {
+  readonly success: boolean;
+  readonly data: readonly T[];
+  readonly error: string | null;
+  readonly meta: {
+    readonly nextCursor: string | null;
+    readonly hasMore: boolean;
+    readonly limit: number;
+  };
+}

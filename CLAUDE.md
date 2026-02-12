@@ -53,7 +53,7 @@ kariro/
 │   │   │   ├── db/
 │   │   │   │   ├── schema/   # Drizzle table definitions (single source of truth for types)
 │   │   │   │   └── migrations/
-│   │   │   ├── middleware/    # Auth, error handling, rate limiting
+│   │   │   ├── middleware/   # Auth, error handling, rate limiting
 │   │   │   ├── lib/          # Shared utilities, AI helpers, queue setup
 │   │   │   └── app.ts        # Hono app setup, middleware registration, route mounting
 │   │   └── vitest.config.ts

@@ -9,6 +9,6 @@ serve(
   },
   (info) => {
     console.log(`Kariro API running on http://localhost:${info.port}`);
-    console.log(`API docs: http://localhost:${info.port}/api/v1/reference`);
+    console.log(`API docs: http://localhost:${info.port}/docs`);
   },
 );

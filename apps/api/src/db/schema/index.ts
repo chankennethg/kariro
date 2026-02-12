@@ -1,3 +1,15 @@
-// Barrel export for Drizzle table definitions
-// Add pgTable definitions here as the schema grows
-export {};
+export {
+  users,
+  jobApplications,
+  applicationStatusEnum,
+  workModeEnum,
+  tags,
+  jobApplicationTags,
+} from './tables.js';
+
+export {
+  usersRelations,
+  jobApplicationsRelations,
+  tagsRelations,
+  jobApplicationTagsRelations,
+} from './relations.js';
