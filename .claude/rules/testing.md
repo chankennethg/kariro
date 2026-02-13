@@ -27,3 +27,10 @@ MANDATORY workflow:
 ## Agent Support
 
 - **tdd-guide** - Use PROACTIVELY for new features, enforces write-tests-first
+
+## Kariro Vitest Conventions
+
+- **Route tests must mock ALL services** that `app.ts` imports, not just the one under test. Otherwise Vitest loads real modules and their transitive deps (db, bcrypt, etc.).
+- **Mock order**: `vi.mock(...)` calls at top → `const service = await import(...)` → `const app = (await import('../app.js')).default`.
+- **Bypass auth in protected-route tests**: mock `verifyAccessToken` to return `{ sub: userId, email }` and pass `Authorization: 'Bearer any-string'`.
+- **Test env vars** live in `apps/api/vitest.config.ts` (no `.env.test` file).

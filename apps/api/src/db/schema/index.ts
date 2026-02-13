@@ -5,6 +5,7 @@ export {
   workModeEnum,
   tags,
   jobApplicationTags,
+  refreshTokens,
 } from './tables.js';
 
 export {
@@ -12,4 +13,5 @@ export {
   jobApplicationsRelations,
   tagsRelations,
   jobApplicationTagsRelations,
+  refreshTokensRelations,
 } from './relations.js';

@@ -8,19 +8,11 @@ import {
   ListApplicationsQuerySchema,
   AttachTagsSchema,
 } from '@kariro/shared';
+import type { AuthUser } from '@/middleware/auth.js';
 import * as applicationService from '@/services/application.service.js';
 import * as tagService from '@/services/tag.service.js';
 
-const app = new OpenAPIHono();
-
-// For now, use a hardcoded user ID header until auth is implemented
-function getUserId(c: { req: { header: (name: string) => string | undefined } }): string {
-  const userId = c.req.header('x-user-id');
-  if (!userId) {
-    throw new Error('x-user-id header is required');
-  }
-  return userId;
-}
+const app = new OpenAPIHono<{ Variables: { user: AuthUser } }>();
 
 // ---- Application CRUD ----
 
@@ -29,6 +21,7 @@ const createApplicationRoute = createRoute({
   path: '/applications',
   tags: ['Applications'],
   summary: 'Create a job application',
+  security: [{ Bearer: [] }],
   request: {
     body: {
       content: {
@@ -47,7 +40,7 @@ const createApplicationRoute = createRoute({
 });
 
 app.openapi(createApplicationRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const body = c.req.valid('json');
   const application = await applicationService.createApplication(userId, body);
   return c.json(
@@ -65,6 +58,7 @@ const listApplicationsRoute = createRoute({
   path: '/applications',
   tags: ['Applications'],
   summary: 'List job applications with filtering and cursor-based pagination',
+  security: [{ Bearer: [] }],
   request: {
     query: ListApplicationsQuerySchema,
   },
@@ -90,7 +84,7 @@ const listApplicationsRoute = createRoute({
 });
 
 app.openapi(listApplicationsRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const query = c.req.valid('query');
   const result = await applicationService.listApplications(userId, {
     status: query.status,
@@ -119,6 +113,7 @@ const getApplicationRoute = createRoute({
   path: '/applications/{id}',
   tags: ['Applications'],
   summary: 'Get a single job application',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
   },
@@ -131,7 +126,7 @@ const getApplicationRoute = createRoute({
 });
 
 app.openapi(getApplicationRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id } = c.req.valid('param');
   const application = await applicationService.getApplication(userId, id);
   return c.json(
@@ -149,6 +144,7 @@ const updateApplicationRoute = createRoute({
   path: '/applications/{id}',
   tags: ['Applications'],
   summary: 'Update a job application',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
     body: {
@@ -168,7 +164,7 @@ const updateApplicationRoute = createRoute({
 });
 
 app.openapi(updateApplicationRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id } = c.req.valid('param');
   const body = c.req.valid('json');
   const application = await applicationService.updateApplication(userId, id, body);
@@ -187,6 +183,7 @@ const deleteApplicationRoute = createRoute({
   path: '/applications/{id}',
   tags: ['Applications'],
   summary: 'Delete a job application',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
   },
@@ -199,7 +196,7 @@ const deleteApplicationRoute = createRoute({
 });
 
 app.openapi(deleteApplicationRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id } = c.req.valid('param');
   await applicationService.deleteApplication(userId, id);
   return c.json({ success: true as const, data: null, error: null }, 200);
@@ -210,6 +207,7 @@ const updateStatusRoute = createRoute({
   path: '/applications/{id}/status',
   tags: ['Applications'],
   summary: 'Update application status (for Kanban drag-and-drop)',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
     body: {
@@ -229,7 +227,7 @@ const updateStatusRoute = createRoute({
 });
 
 app.openapi(updateStatusRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id } = c.req.valid('param');
   const { status } = c.req.valid('json');
   const application = await applicationService.updateApplicationStatus(userId, id, status);
@@ -250,6 +248,7 @@ const attachTagsRoute = createRoute({
   path: '/applications/{id}/tags',
   tags: ['Applications', 'Tags'],
   summary: 'Attach tags to an application',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
     body: {
@@ -273,7 +272,7 @@ const attachTagsRoute = createRoute({
 });
 
 app.openapi(attachTagsRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id } = c.req.valid('param');
   const { tagIds } = c.req.valid('json');
   const result = await tagService.attachTags(userId, id, tagIds);
@@ -285,6 +284,7 @@ const removeTagRoute = createRoute({
   path: '/applications/{id}/tags/{tagId}',
   tags: ['Applications', 'Tags'],
   summary: 'Remove a tag from an application',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid(), tagId: z.string().uuid() }),
   },
@@ -297,7 +297,7 @@ const removeTagRoute = createRoute({
 });
 
 app.openapi(removeTagRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id, tagId } = c.req.valid('param');
   await tagService.removeTag(userId, id, tagId);
   return c.json({ success: true as const, data: null, error: null }, 200);

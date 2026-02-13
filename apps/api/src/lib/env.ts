@@ -5,6 +5,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().url(),
   PORT: z.coerce.number().default(4000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  JWT_SECRET: z.string().min(32),
   OPENAI_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
 });
@@ -13,7 +14,7 @@ function loadEnv() {
   const parsed = envSchema.safeParse(process.env);
 
   if (!parsed.success) {
-    console.error('Invalid environment variables:', parsed.error.flatten().fieldErrors);
+    console.error('Invalid environment variables:', Object.keys(parsed.error.flatten().fieldErrors));
     process.exit(1);
   }
 

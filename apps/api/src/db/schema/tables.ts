@@ -8,6 +8,7 @@ import {
   timestamp,
   unique,
   primaryKey,
+  index,
 } from 'drizzle-orm/pg-core';
 
 // ---- Enums ----
@@ -82,6 +83,26 @@ export const tags = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [unique('tags_user_id_name_unique').on(t.userId, t.name)],
+);
+
+// ---- Refresh Tokens ----
+
+export const refreshTokens = pgTable(
+  'refresh_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: varchar('token_hash', { length: 64 }).notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [index('refresh_tokens_user_id_idx').on(t.userId)],
 );
 
 // ---- Junction: Job Application Tags ----

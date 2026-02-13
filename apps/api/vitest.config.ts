@@ -8,6 +8,7 @@ export default defineConfig({
       DATABASE_URL: 'postgresql://kariro:kariro@localhost:5432/kariro_test',
       REDIS_URL: 'redis://localhost:6379',
       NODE_ENV: 'test',
+      JWT_SECRET: 'DO-NOT-USE-IN-PRODUCTION-test-key-00000000',
     },
     coverage: {
       provider: 'v8',

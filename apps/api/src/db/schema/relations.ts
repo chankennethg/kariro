@@ -1,9 +1,14 @@
 import { relations } from 'drizzle-orm';
-import { users, jobApplications, tags, jobApplicationTags } from './tables.js';
+import { users, jobApplications, tags, jobApplicationTags, refreshTokens } from './tables.js';
 
 export const usersRelations = relations(users, ({ many }) => ({
   jobApplications: many(jobApplications),
   tags: many(tags),
+  refreshTokens: many(refreshTokens),
+}));
+
+export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
+  user: one(users, { fields: [refreshTokens.userId], references: [users.id] }),
 }));
 
 export const jobApplicationsRelations = relations(jobApplications, ({ one, many }) => ({

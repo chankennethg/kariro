@@ -25,7 +25,8 @@ export const errorHandler: ErrorHandler = (err, c) => {
     );
   }
 
-  console.error('Unhandled error:', err);
+  // Log only message and stack — never the full error object (may contain sensitive data)
+  console.error('Unhandled error:', err.message, err.stack);
 
   return c.json(
     {

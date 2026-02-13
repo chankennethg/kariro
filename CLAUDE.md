@@ -34,7 +34,7 @@ pnpm test                     # run all tests
 pnpm test -- --run            # run tests once (no watch)
 pnpm lint                     # eslint + prettier check
 pnpm lint:fix                 # auto-fix lint issues
-pnpm db:generate              # generate Drizzle migrations
+pnpm db:generate --name <name> # generate Drizzle migration (always provide --name)
 pnpm db:migrate               # apply migrations
 pnpm db:studio                # open Drizzle Studio
 docker compose up -d           # start Postgres + Redis locally
@@ -99,7 +99,7 @@ kariro/
 - Prefer `uuid` for primary keys (use `gen_random_uuid()` default).
 - Always add `createdAt` and `updatedAt` timestamps to every table.
 - Use snake_case for column names in the database, camelCase in TypeScript.
-- After schema changes, run `pnpm db:generate` then `pnpm db:migrate`.
+- After schema changes, run `pnpm db:generate --name <descriptive_name>` then `pnpm db:migrate`. Always use `--name` with a snake_case description (e.g., `create_refresh_tokens`, `add_user_avatar_column`). Never use drizzle-kit's random default names.
 
 ## Testing
 

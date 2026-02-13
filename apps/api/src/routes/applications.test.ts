@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const userId = '550e8400-e29b-41d4-a716-446655440000';
 const now = new Date();
 const mockApplication = {
   id: '660e8400-e29b-41d4-a716-446655440001',
-  userId: '550e8400-e29b-41d4-a716-446655440000',
+  userId,
   companyName: 'Acme Corp',
   roleTitle: 'Software Engineer',
   jobUrl: null,
@@ -33,14 +34,44 @@ vi.mock('@/services/application.service.js', () => ({
 vi.mock('@/services/tag.service.js', () => ({
   attachTags: vi.fn(),
   removeTag: vi.fn(),
+  createTag: vi.fn(),
+  listTags: vi.fn(),
+  deleteTag: vi.fn(),
+}));
+
+// Mock auth service so requireAuth middleware passes
+vi.mock('@/services/auth.service.js', () => ({
+  verifyAccessToken: vi.fn().mockResolvedValue({
+    sub: '550e8400-e29b-41d4-a716-446655440000',
+    email: 'test@example.com',
+  }),
+  registerUser: vi.fn(),
+  loginUser: vi.fn(),
+  refreshAccessToken: vi.fn(),
+  logoutUser: vi.fn(),
+  getCurrentUser: vi.fn(),
+  cleanupExpiredTokens: vi.fn(),
+}));
+
+// Mock rate limiter to be a pass-through in tests
+vi.mock('@/middleware/rate-limit.js', () => ({
+  rateLimiter: () => {
+    const { createMiddleware } = require('hono/factory');
+    return createMiddleware(async (_c: unknown, next: () => Promise<void>) => { await next(); });
+  },
 }));
 
 const applicationService = await import('@/services/application.service.js');
+const authService = await import('@/services/auth.service.js');
 const app = (await import('../app.js')).default;
+
+const authHeader = { Authorization: 'Bearer test-token' };
 
 describe('Application Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Re-setup the default mock for verifyAccessToken after clearAllMocks
+    vi.mocked(authService.verifyAccessToken).mockResolvedValue({ sub: userId, email: 'test@example.com' });
   });
 
   describe('POST /api/v1/applications', () => {
@@ -51,7 +82,7 @@ describe('Application Routes', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-user-id': '550e8400-e29b-41d4-a716-446655440000',
+          ...authHeader,
         },
         body: JSON.stringify({
           companyName: 'Acme Corp',
@@ -64,6 +95,19 @@ describe('Application Routes', () => {
       expect(body.success).toBe(true);
       expect(body.data.companyName).toBe('Acme Corp');
     });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request('/api/v1/applications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: 'Acme Corp',
+          roleTitle: 'Software Engineer',
+        }),
+      });
+
+      expect(res.status).toBe(401);
+    });
   });
 
   describe('GET /api/v1/applications', () => {
@@ -75,7 +119,7 @@ describe('Application Routes', () => {
       });
 
       const res = await app.request('/api/v1/applications', {
-        headers: { 'x-user-id': '550e8400-e29b-41d4-a716-446655440000' },
+        headers: authHeader,
       });
 
       expect(res.status).toBe(200);
@@ -97,9 +141,7 @@ describe('Application Routes', () => {
 
       const res = await app.request(
         `/api/v1/applications/${mockApplication.id}`,
-        {
-          headers: { 'x-user-id': '550e8400-e29b-41d4-a716-446655440000' },
-        },
+        { headers: authHeader },
       );
 
       expect(res.status).toBe(200);
@@ -119,7 +161,7 @@ describe('Application Routes', () => {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
-            'x-user-id': '550e8400-e29b-41d4-a716-446655440000',
+            ...authHeader,
           },
           body: JSON.stringify({ status: 'applied' }),
         },
@@ -139,7 +181,7 @@ describe('Application Routes', () => {
         `/api/v1/applications/${mockApplication.id}`,
         {
           method: 'DELETE',
-          headers: { 'x-user-id': '550e8400-e29b-41d4-a716-446655440000' },
+          headers: authHeader,
         },
       );
 

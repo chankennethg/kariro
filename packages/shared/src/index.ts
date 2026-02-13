@@ -26,4 +26,17 @@ export {
   type AttachTags,
 } from './schemas/tag.js';
 
+export {
+  RegisterSchema,
+  type Register,
+  LoginSchema,
+  type Login,
+  RefreshSchema,
+  type Refresh,
+  AuthTokensSchema,
+  type AuthTokens,
+  UserProfileSchema,
+  type UserProfile,
+} from './schemas/auth.js';
+
 export type { ApiResponse, PaginatedResponse, CursorPaginatedResponse } from './types/api.js';

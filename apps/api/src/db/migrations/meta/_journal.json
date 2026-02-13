@@ -6,7 +6,21 @@
       "idx": 0,
       "version": "7",
       "when": 1770919764679,
-      "tag": "0000_young_hobgoblin",
+      "tag": "0000_initial_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770928606871,
+      "tag": "0001_create_refresh_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770935701924,
+      "tag": "0002_add_refresh_tokens_updated_at_and_index",
       "breakpoints": true
     }
   ]

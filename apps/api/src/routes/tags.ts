@@ -1,23 +1,17 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { TagSchema, CreateTagSchema } from '@kariro/shared';
+import type { AuthUser } from '@/middleware/auth.js';
 import * as tagService from '@/services/tag.service.js';
 
-const app = new OpenAPIHono();
-
-function getUserId(c: { req: { header: (name: string) => string | undefined } }): string {
-  const userId = c.req.header('x-user-id');
-  if (!userId) {
-    throw new Error('x-user-id header is required');
-  }
-  return userId;
-}
+const app = new OpenAPIHono<{ Variables: { user: AuthUser } }>();
 
 const createTagRoute = createRoute({
   method: 'post',
   path: '/tags',
   tags: ['Tags'],
   summary: 'Create a tag',
+  security: [{ Bearer: [] }],
   request: {
     body: {
       content: {
@@ -40,7 +34,7 @@ const createTagRoute = createRoute({
 });
 
 app.openapi(createTagRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const body = c.req.valid('json');
   const tag = await tagService.createTag(userId, body);
   return c.json(
@@ -58,6 +52,7 @@ const listTagsRoute = createRoute({
   path: '/tags',
   tags: ['Tags'],
   summary: 'List all tags for the current user',
+  security: [{ Bearer: [] }],
   responses: {
     200: {
       content: {
@@ -71,7 +66,7 @@ const listTagsRoute = createRoute({
 });
 
 app.openapi(listTagsRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const tagList = await tagService.listTags(userId);
   return c.json(
     {
@@ -88,6 +83,7 @@ const deleteTagRoute = createRoute({
   path: '/tags/{id}',
   tags: ['Tags'],
   summary: 'Delete a tag',
+  security: [{ Bearer: [] }],
   request: {
     params: z.object({ id: z.string().uuid() }),
   },
@@ -104,7 +100,7 @@ const deleteTagRoute = createRoute({
 });
 
 app.openapi(deleteTagRoute, async (c) => {
-  const userId = getUserId(c);
+  const userId = c.get('user').id;
   const { id } = c.req.valid('param');
   await tagService.deleteTag(userId, id);
   return c.json({ success: true as const, data: null, error: null }, 200);
