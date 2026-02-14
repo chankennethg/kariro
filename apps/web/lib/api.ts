@@ -1,4 +1,4 @@
-import type { ApiResponse } from '@kariro/shared';
+import type { ApiResponse, CursorPaginatedResponse } from '@kariro/shared';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -46,10 +46,10 @@ interface FetchOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
 }
 
-export async function apiClient<T>(
+async function fetchWithAuth(
   endpoint: string,
   options: FetchOptions = {},
-): Promise<ApiResponse<T>> {
+): Promise<Response> {
   const { body, headers: customHeaders, ...rest } = options;
 
   const headers: Record<string, string> = {
@@ -82,5 +82,21 @@ export async function apiClient<T>(
     }
   }
 
+  return res;
+}
+
+export async function apiClient<T>(
+  endpoint: string,
+  options: FetchOptions = {},
+): Promise<ApiResponse<T>> {
+  const res = await fetchWithAuth(endpoint, options);
   return res.json() as Promise<ApiResponse<T>>;
+}
+
+export async function apiClientCursor<T>(
+  endpoint: string,
+  options: FetchOptions = {},
+): Promise<CursorPaginatedResponse<T>> {
+  const res = await fetchWithAuth(endpoint, options);
+  return res.json() as Promise<CursorPaginatedResponse<T>>;
 }
