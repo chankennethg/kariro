@@ -24,9 +24,12 @@ MANY SMALL FILES > FEW LARGE FILES:
 
 ALWAYS handle errors comprehensively:
 - Handle errors explicitly at every level
-- Provide user-friendly error messages in UI-facing code
+- Provide user-friendly error messages that make sense to the end user — never show "Internal server error" for predictable failures
+- Anticipate all expected failure modes (duplicate records, missing resources, invalid input) and handle them with specific error messages
 - Log detailed error context on the server side
 - Never silently swallow errors
+- Error messages must flow from backend → BFF → frontend without being replaced or lost along the way
+- ORM/database errors are often wrapped — always check nested error properties (e.g., `err.cause`) when detecting specific error codes
 
 ## Input Validation
 

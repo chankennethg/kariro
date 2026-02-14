@@ -177,10 +177,15 @@ export async function cleanupExpiredTokens() {
 }
 
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: string }).code === '23505'
-  );
+  if (typeof err !== 'object' || err === null) return false;
+  // Direct postgres error (has .code on the error itself)
+  if ('code' in err && (err as { code: string }).code === '23505') return true;
+  // Drizzle-wrapped error (postgres error is on .cause)
+  if ('cause' in err) {
+    const cause = (err as { cause: unknown }).cause;
+    if (typeof cause === 'object' && cause !== null && 'code' in cause) {
+      return (cause as { code: string }).code === '23505';
+    }
+  }
+  return false;
 }

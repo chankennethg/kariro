@@ -62,7 +62,7 @@ kariro/
 │       │   ├── layout.tsx    # Root layout
 │       │   ├── page.tsx      # Landing page
 │       │   ├── (auth)/       # Auth route group (login, register)
-│       │   └── (dashboard)/  # Protected dashboard route group
+│       │   └── dashboard/    # Protected dashboard pages
 │       ├── components/       # React components (prefer Server Components by default)
 │       │   └── ui/           # shadcn/ui components
 │       ├── lib/              # Client-side utilities, API client, hooks
@@ -80,7 +80,7 @@ kariro/
 - **Zod schemas are the source of truth**. Every request body, response, and query param has a Zod schema. Drizzle schemas define DB shape; Zod schemas define API shape. Use `drizzle-zod` to bridge when they overlap.
 - **Every route MUST have OpenAPI metadata** via `@hono/zod-openapi` createRoute pattern. No undocumented endpoints.
 - **Environment variables**: Validated at startup with Zod in `apps/api/src/lib/env.ts`. Never use `process.env` directly elsewhere; import from `env.ts`.
-- **Error handling**: Use a custom `AppError` class with status code and error code. Global error middleware in `middleware/error.ts` catches and formats all errors consistently.
+- **Error handling**: Use `AppError` for ALL expected error cases (validation failures, not found, conflicts, auth errors). The global error handler in `middleware/error.ts` catches everything — `AppError` returns the specific message; unexpected errors return the raw message in dev and "Internal server error" in prod. **Never let expected errors fall through as unhandled** — if it's a case you can anticipate (duplicate email, invalid input, missing resource), throw an `AppError` with a user-friendly message.
 - **AI calls go through the queue**. Never call AI providers directly in route handlers. Enqueue a BullMQ job and return 202 with a job ID. The worker processes it async.
 
 ## Next.js Frontend Rules
@@ -90,7 +90,7 @@ kariro/
 - **Data fetching**: Use Server Components with `fetch()` to call the Hono API. For client-side mutations and real-time data, use React hooks in Client Components.
 - **API calls from Server Components**: Call the Hono API directly via `fetch("http://localhost:4000/api/v1/...")` with appropriate headers. Do NOT use Next.js API routes as a proxy — the Hono API is the single source of truth.
 - **Do NOT duplicate backend logic in Next.js API routes**. The Hono API handles all business logic, auth, and validation. Next.js is purely a presentation layer.
-- **Route groups**: Use `(auth)` for login/register pages and `(dashboard)` for protected pages with shared layout (sidebar, nav).
+- **Route groups**: Use `(auth)` for login/register pages. Use regular directories (e.g., `dashboard/`) for URL segments that need their own layout — route groups `(name)` are invisible in the URL.
 - **shadcn/ui**: Add components via `pnpm dlx shadcn@latest add <component> --cwd apps/web`. Do not manually create shadcn components.
 
 ## Database
@@ -112,9 +112,13 @@ kariro/
 - Hono's `c.json()` returns `Response`, not raw data. Don't try to destructure it.
 - `@hono/zod-openapi` routes use `createRoute()` + `app.openapi()`, NOT regular `app.get()` / `app.post()`. Mixing them means the route won't appear in Scalar docs.
 - Drizzle `select()` returns an array, even for single-row queries. Always destructure: `const [user] = await db.select()...`
+- Drizzle ORM wraps database errors in `DrizzleQueryError`. The original postgres error code (e.g., `23505` for unique violations) is on `err.cause.code`, NOT `err.code`. Always check both when detecting specific database errors.
 - BullMQ workers must be started as a separate process (`apps/api/src/worker.ts`), not imported into the main Hono app.
 - Vercel AI SDK's `generateObject()` with a Zod schema is the preferred way to get structured AI output. Avoid parsing raw text responses.
 - pnpm workspace: when adding deps to a specific app, use `pnpm add <pkg> --filter api` or `--filter web`.
 - Next.js App Router: `layout.tsx` files CANNOT be Client Components. If a layout needs client-side logic, extract it into a child Client Component.
+- Next.js App Router: Route groups `(name)` do NOT create a URL segment. `app/(dashboard)/page.tsx` maps to `/`, not `/dashboard`. Use a regular directory `app/dashboard/page.tsx` for the `/dashboard` URL.
+- Next.js 16: The `middleware.ts` convention is deprecated. Use `proxy.ts` with `export function proxy()` instead.
 - Next.js `fetch()` in Server Components caches by default. Use `{ cache: "no-store" }` for data that should always be fresh (like job application status).
 - Do NOT import from `apps/api` directly into `apps/web`. Share types through `packages/shared` only.
+- After generating a migration with `pnpm db:generate`, always run `pnpm db:migrate` immediately. A generated-but-not-applied migration will silently cause runtime errors.

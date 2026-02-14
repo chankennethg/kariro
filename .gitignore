@@ -23,6 +23,9 @@ coverage/
 *.swp
 *.swo
 
+# Documentation
+docs/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,5 +1,6 @@
 import type { ErrorHandler } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { env } from '@/lib/env.js';
 
 export class AppError extends Error {
   constructor(
@@ -25,14 +26,15 @@ export const errorHandler: ErrorHandler = (err, c) => {
     );
   }
 
-  // Log only message and stack — never the full error object (may contain sensitive data)
   console.error('Unhandled error:', err.message, err.stack);
+
+  const isDev = env.NODE_ENV !== 'production';
 
   return c.json(
     {
       success: false,
       data: null,
-      error: 'Internal server error',
+      error: isDev ? err.message : 'Internal server error',
       errorCode: 'INTERNAL_ERROR',
     },
     500,
