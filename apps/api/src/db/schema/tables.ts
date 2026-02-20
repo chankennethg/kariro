@@ -9,6 +9,7 @@ import {
   unique,
   primaryKey,
   index,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 
 // ---- Enums ----
@@ -24,6 +25,14 @@ export const applicationStatusEnum = pgEnum('application_status', [
 ]);
 
 export const workModeEnum = pgEnum('work_mode', ['remote', 'hybrid', 'onsite']);
+
+export const analysisStatusEnum = pgEnum('analysis_status', [
+  'processing',
+  'completed',
+  'failed',
+]);
+
+export const toneEnum = pgEnum('cover_letter_tone', ['formal', 'conversational', 'confident']);
 
 // ---- Users ----
 
@@ -118,4 +127,80 @@ export const jobApplicationTags = pgTable(
       .references(() => tags.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.jobApplicationId, t.tagId] })],
+);
+
+// ---- User Profiles ----
+
+export const userProfiles = pgTable('user_profiles', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  resumeText: text('resume_text'),
+  skills: jsonb('skills').$type<string[]>().notNull().default([]),
+  preferredRoles: jsonb('preferred_roles').$type<string[]>().notNull().default([]),
+  preferredLocations: jsonb('preferred_locations').$type<string[]>().notNull().default([]),
+  salaryExpectationMin: integer('salary_expectation_min'),
+  salaryExpectationMax: integer('salary_expectation_max'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});
+
+// ---- Cover Letters ----
+
+// Cover letters are immutable after creation — updatedAt is intentionally omitted.
+export const coverLetters = pgTable(
+  'cover_letters',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => jobApplications.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tone: toneEnum('tone').notNull(),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('cover_letters_user_id_idx').on(t.userId),
+    index('cover_letters_application_id_idx').on(t.applicationId),
+  ],
+);
+
+// ---- AI Analyses ----
+
+export const aiAnalyses = pgTable(
+  'ai_analyses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // set null (not cascade) — the analysis result has standalone value even after the
+    // application is deleted (e.g. user may still want to view the extracted skills/fit score).
+    applicationId: uuid('application_id').references(() => jobApplications.id, {
+      onDelete: 'set null',
+    }),
+    jobId: varchar('job_id', { length: 255 }).notNull().unique(),
+    type: varchar('type', { length: 50 }).notNull(),
+    status: analysisStatusEnum('status').notNull().default('processing'),
+    input: jsonb('input').$type<Record<string, unknown>>().notNull(),
+    result: jsonb('result').$type<Record<string, unknown>>(),
+    error: text('error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index('ai_analyses_user_id_idx').on(t.userId),
+    index('ai_analyses_job_id_idx').on(t.jobId),
+  ],
 );

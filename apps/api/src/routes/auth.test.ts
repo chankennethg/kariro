@@ -37,12 +37,32 @@ vi.mock('@/services/tag.service.js', () => ({
   removeTag: vi.fn(),
 }));
 
+vi.mock('@/services/profile.service.js', () => ({
+  upsertProfile: vi.fn(),
+  getProfile: vi.fn(),
+}));
+
+vi.mock('@/services/ai.service.js', () => ({
+  enqueueAnalyzeJob: vi.fn(),
+  enqueueCoverLetterJob: vi.fn(),
+  getAnalysisByJobId: vi.fn(),
+  saveAnalysisResult: vi.fn(),
+  saveAnalysisError: vi.fn(),
+}));
+
+vi.mock('@/services/cover-letter.service.js', () => ({
+  saveCoverLetter: vi.fn(),
+  getCoverLettersByApplicationId: vi.fn(),
+}));
+
+vi.mock('@/lib/queue.js', () => ({
+  aiQueue: { add: vi.fn() },
+  connection: {},
+}));
+
 // Mock rate limiter to be a pass-through in tests
 vi.mock('@/middleware/rate-limit.js', () => ({
-  rateLimiter: () => {
-    const { createMiddleware } = require('hono/factory');
-    return createMiddleware(async (_c: unknown, next: () => Promise<void>) => { await next(); });
-  },
+  rateLimiter: () => async (_c: unknown, next: () => Promise<void>) => { await next(); },
 }));
 
 const authService = await import('@/services/auth.service.js');

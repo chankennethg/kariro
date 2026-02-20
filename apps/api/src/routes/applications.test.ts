@@ -53,15 +53,36 @@ vi.mock('@/services/auth.service.js', () => ({
   cleanupExpiredTokens: vi.fn(),
 }));
 
+vi.mock('@/services/profile.service.js', () => ({
+  upsertProfile: vi.fn(),
+  getProfile: vi.fn(),
+}));
+
+vi.mock('@/services/ai.service.js', () => ({
+  enqueueAnalyzeJob: vi.fn(),
+  enqueueCoverLetterJob: vi.fn(),
+  getAnalysisByJobId: vi.fn(),
+  saveAnalysisResult: vi.fn(),
+  saveAnalysisError: vi.fn(),
+}));
+
+vi.mock('@/services/cover-letter.service.js', () => ({
+  saveCoverLetter: vi.fn(),
+  getCoverLettersByApplicationId: vi.fn(),
+}));
+
+vi.mock('@/lib/queue.js', () => ({
+  aiQueue: { add: vi.fn() },
+  connection: {},
+}));
+
 // Mock rate limiter to be a pass-through in tests
 vi.mock('@/middleware/rate-limit.js', () => ({
-  rateLimiter: () => {
-    const { createMiddleware } = require('hono/factory');
-    return createMiddleware(async (_c: unknown, next: () => Promise<void>) => { await next(); });
-  },
+  rateLimiter: () => async (_c: unknown, next: () => Promise<void>) => { await next(); },
 }));
 
 const applicationService = await import('@/services/application.service.js');
+const coverLetterService = await import('@/services/cover-letter.service.js');
 const authService = await import('@/services/auth.service.js');
 const app = (await import('../app.js')).default;
 
@@ -189,6 +210,68 @@ describe('Application Routes', () => {
       const body = (await res.json()) as { success: boolean; data: null };
       expect(body.success).toBe(true);
       expect(body.data).toBeNull();
+    });
+  });
+
+  describe('GET /api/v1/applications/:id/cover-letters', () => {
+    const mockLetter = {
+      id: 'aaa00000-0000-0000-0000-000000000001',
+      applicationId: mockApplication.id,
+      userId,
+      tone: 'formal' as const,
+      content: 'Dear Hiring Manager, ...',
+      createdAt: now,
+    };
+
+    it('returns list of cover letters for an application', async () => {
+      vi.mocked(coverLetterService.getCoverLettersByApplicationId).mockResolvedValueOnce([mockLetter]);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/cover-letters`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { tone: string }[] };
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].tone).toBe('formal');
+    });
+
+    it('returns empty array when no cover letters exist', async () => {
+      vi.mocked(coverLetterService.getCoverLettersByApplicationId).mockResolvedValueOnce([]);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/cover-letters`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { data: unknown[] };
+      expect(body.data).toHaveLength(0);
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(coverLetterService.getCoverLettersByApplicationId).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/cover-letters`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(404);
+      const body = (await res.json()) as { errorCode: string };
+      expect(body.errorCode).toBe('NOT_FOUND');
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/cover-letters`,
+      );
+      expect(res.status).toBe(401);
     });
   });
 });

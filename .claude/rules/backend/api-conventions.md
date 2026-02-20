@@ -49,7 +49,36 @@ Services return raw data with Date objects; routes handle serialization.
 
 All foreign keys to `users` should use `onDelete: 'cascade'` so deleting a user cleans up their data.
 
+## Rate Limiting
+
+Rate limits are per-IP using a sliding window. Apply stricter limits to expensive operations:
+
+| Scope | Window | Max |
+|-------|--------|-----|
+| Global (`/*`) | 1 min | 100 |
+| Auth (`/auth/*`) | 15 min | 20 |
+| AI (`/ai/*`) | 1 min | 5 |
+
+Register rate limiters in `app.ts` **before** `requireAuth` middleware for the same path.
+
+## OpenAPI Documentation
+
+Every `createRoute()` should include a `description` field (in addition to `summary`) with:
+- Rate limit info for the endpoint
+- Security constraints
+- Behavioral notes (e.g., async processing, nullable responses)
+
+The top-level API description lives in `lib/openapi.ts` and is imported by `app.ts` → `api.doc()`. It documents global rate limits, auth flow, security measures, and response format.
+
 ## Shared Package
 
-`packages/shared` — one file per domain (`auth.ts`, `application.ts`, etc.).
+`packages/shared` — one file per domain (`auth.ts`, `application.ts`, `profile.ts`, `ai.ts`, etc.).
 Export both the Zod schema and the inferred type. Barrel-export from `index.ts`.
+
+### Zod schemas with cross-field validation
+Avoid `.refine()` on request schemas — it breaks OpenAPI spec generation in `@hono/zod-openapi`. Instead, validate cross-field constraints manually in the route handler:
+```ts
+if (!body.jobDescription && !body.jobUrl) {
+  throw new AppError(400, 'INVALID_INPUT', 'Either jobDescription or jobUrl must be provided');
+}
+```

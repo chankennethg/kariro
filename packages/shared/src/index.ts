@@ -39,4 +39,36 @@ export {
   type UserProfile,
 } from './schemas/auth.js';
 
+export {
+  ProfileSchema,
+  type Profile,
+  UpsertProfileSchema,
+  type UpsertProfile,
+} from './schemas/profile.js';
+
+export {
+  analysisStatuses,
+  AnalysisStatusSchema,
+  type AnalysisStatus,
+  AnalyzeJobRequestSchema,
+  type AnalyzeJobRequest,
+  JobAnalysisResultSchema,
+  type JobAnalysisResult,
+  AiAnalysisSchema,
+  type AiAnalysis,
+  EnqueuedJobSchema,
+  type EnqueuedJob,
+} from './schemas/ai.js';
+
+export {
+  tones,
+  type CoverLetterTone,
+  CoverLetterRequestSchema,
+  type CoverLetterRequest,
+  CoverLetterResultSchema,
+  type CoverLetterResult,
+  CoverLetterSchema,
+  type CoverLetter,
+} from './schemas/cover-letter.js';
+
 export type { ApiResponse, PaginatedResponse, CursorPaginatedResponse } from './types/api.js';

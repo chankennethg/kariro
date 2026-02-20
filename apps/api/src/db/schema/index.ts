@@ -3,9 +3,14 @@ export {
   jobApplications,
   applicationStatusEnum,
   workModeEnum,
+  analysisStatusEnum,
+  toneEnum,
   tags,
   jobApplicationTags,
   refreshTokens,
+  userProfiles,
+  aiAnalyses,
+  coverLetters,
 } from './tables.js';
 
 export {
@@ -14,4 +19,7 @@ export {
   tagsRelations,
   jobApplicationTagsRelations,
   refreshTokensRelations,
+  userProfilesRelations,
+  aiAnalysesRelations,
+  coverLettersRelations,
 } from './relations.js';

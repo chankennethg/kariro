@@ -1,4 +1,4 @@
-.PHONY: dev build test lint lint-fix db-generate db-migrate db-studio docker-up docker-down
+.PHONY: dev build test lint lint-fix db-generate db-migrate db-studio docker-up docker-down worker
 
 dev:
 	pnpm dev
@@ -29,3 +29,6 @@ docker-up:
 
 docker-down:
 	docker compose down
+
+worker:
+	pnpm --filter api worker

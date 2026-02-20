@@ -7,10 +7,12 @@ import {
   UpdateApplicationStatusSchema,
   ListApplicationsQuerySchema,
   AttachTagsSchema,
+  CoverLetterSchema,
 } from '@kariro/shared';
 import type { AuthUser } from '@/middleware/auth.js';
 import * as applicationService from '@/services/application.service.js';
 import * as tagService from '@/services/tag.service.js';
+import * as coverLetterService from '@/services/cover-letter.service.js';
 
 const app = new OpenAPIHono<{ Variables: { user: AuthUser } }>();
 
@@ -301,6 +303,63 @@ app.openapi(removeTagRoute, async (c) => {
   const { id, tagId } = c.req.valid('param');
   await tagService.removeTag(userId, id, tagId);
   return c.json({ success: true as const, data: null, error: null }, 200);
+});
+
+// ---- Cover Letters ----
+
+const listCoverLettersRoute = createRoute({
+  method: 'get',
+  path: '/applications/{id}/cover-letters',
+  tags: ['Applications', 'AI'],
+  summary: 'List cover letters for a job application',
+  description: `Returns all AI-generated cover letters for the specified application, ordered newest first.
+
+Ownership is verified — users can only access their own applications' cover letters.`,
+  security: [{ Bearer: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: z.array(CoverLetterSchema),
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'List of cover letters',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            data: z.null(),
+            error: z.string(),
+            errorCode: z.string(),
+          }),
+        },
+      },
+      description: 'Application not found',
+    },
+  },
+});
+
+app.openapi(listCoverLettersRoute, async (c) => {
+  const userId = c.get('user').id;
+  const { id } = c.req.valid('param');
+  const letters = await coverLetterService.getCoverLettersByApplicationId(userId, id);
+  return c.json(
+    {
+      success: true as const,
+      data: letters.map((l) => ({ ...l, createdAt: l.createdAt.toISOString() })),
+      error: null,
+    },
+    200,
+  );
 });
 
 export default app;

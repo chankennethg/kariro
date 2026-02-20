@@ -22,6 +22,20 @@
       "when": 1770935701924,
       "tag": "0002_add_refresh_tokens_updated_at_and_index",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771534475793,
+      "tag": "0003_add_user_profiles_and_ai_analyses",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771586200715,
+      "tag": "0004_add_cover_letters",
+      "breakpoints": true
     }
   ]
 }
