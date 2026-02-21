@@ -1,14 +1,22 @@
 import crypto from 'node:crypto';
 import { eq, and, sql } from 'drizzle-orm';
-import type { AnalyzeJobRequest, JobAnalysisResult, CoverLetterRequest } from '@kariro/shared';
+import type {
+  AnalyzeJobRequest,
+  JobAnalysisResult,
+  CoverLetterRequest,
+  InterviewPrepRequest,
+  ResumeGapRequest,
+} from '@kariro/shared';
 import { db } from '@/db/index.js';
-import { aiAnalyses, coverLetters } from '@/db/schema/tables.js';
+import { aiAnalyses, coverLetters, interviewPreps, resumeGapAnalyses } from '@/db/schema/tables.js';
 import { aiQueue } from '@/lib/queue.js';
 import { AppError } from '@/middleware/error.js';
 import * as applicationService from './application.service.js';
 
 const MAX_PENDING_ANALYSES = 10;
 const MAX_COVER_LETTERS_PER_APPLICATION = 20;
+const MAX_INTERVIEW_PREPS_PER_APPLICATION = 10;
+const MAX_RESUME_GAPS_PER_APPLICATION = 10;
 
 async function enforceQueueLimit(userId: string): Promise<void> {
   const [{ count }] = await db
@@ -23,6 +31,44 @@ async function enforceQueueLimit(userId: string): Promise<void> {
       'You have too many pending analyses. Please wait for some to complete.',
     );
   }
+}
+
+async function insertAndEnqueue(
+  userId: string,
+  applicationId: string,
+  type: string,
+  jobName: string,
+  input: Record<string, unknown>,
+): Promise<{ jobId: string; status: 'processing' }> {
+  await enforceQueueLimit(userId);
+
+  const jobId = crypto.randomUUID();
+
+  await db.insert(aiAnalyses).values({
+    userId,
+    applicationId,
+    jobId,
+    type,
+    status: 'processing',
+    input,
+  });
+
+  try {
+    await aiQueue.add(jobName, { userId, jobId, ...input }, {
+      jobId,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 5000 },
+    });
+  } catch {
+    await db.delete(aiAnalyses).where(eq(aiAnalyses.jobId, jobId));
+    throw new AppError(
+      503,
+      'QUEUE_UNAVAILABLE',
+      'Job processing is temporarily unavailable. Please try again later.',
+    );
+  }
+
+  return { jobId, status: 'processing' as const };
 }
 
 export async function enqueueAnalyzeJob(userId: string, data: AnalyzeJobRequest) {
@@ -83,10 +129,8 @@ export async function getAnalysisByJobId(userId: string, jobId: string) {
 }
 
 export async function enqueueCoverLetterJob(userId: string, data: CoverLetterRequest) {
-  // Verify application ownership
   await applicationService.getApplication(userId, data.applicationId);
 
-  // Per-application cover letter cap to prevent AI cost abuse
   const [{ letterCount }] = await db
     .select({ letterCount: sql<number>`count(*)::int` })
     .from(coverLetters)
@@ -96,44 +140,56 @@ export async function enqueueCoverLetterJob(userId: string, data: CoverLetterReq
     throw new AppError(
       429,
       'COVER_LETTER_LIMIT',
-      `Maximum of ${MAX_COVER_LETTERS_PER_APPLICATION} cover letters reached for this application. Delete some to generate more.`,
+      `Maximum of ${MAX_COVER_LETTERS_PER_APPLICATION} cover letters reached for this application.`,
     );
   }
 
-  // Per-user queue limit to prevent queue flooding (shared across all job types)
-  await enforceQueueLimit(userId);
-
-  const jobId = crypto.randomUUID();
-
-  await db.insert(aiAnalyses).values({
-    userId,
+  return insertAndEnqueue(userId, data.applicationId, 'generate-cover-letter', 'generate-cover-letter', {
     applicationId: data.applicationId,
-    jobId,
-    type: 'generate-cover-letter',
-    status: 'processing',
-    input: data as Record<string, unknown>,
+    tone: data.tone,
   });
+}
 
-  try {
-    await aiQueue.add(
-      'generate-cover-letter',
-      { userId, jobId, ...data },
-      {
-        jobId,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-      },
-    );
-  } catch {
-    await db.delete(aiAnalyses).where(eq(aiAnalyses.jobId, jobId));
+export async function enqueueInterviewPrepJob(userId: string, data: InterviewPrepRequest) {
+  await applicationService.getApplication(userId, data.applicationId);
+
+  const [{ prepCount }] = await db
+    .select({ prepCount: sql<number>`count(*)::int` })
+    .from(interviewPreps)
+    .where(and(eq(interviewPreps.applicationId, data.applicationId), eq(interviewPreps.userId, userId)));
+
+  if (prepCount >= MAX_INTERVIEW_PREPS_PER_APPLICATION) {
     throw new AppError(
-      503,
-      'QUEUE_UNAVAILABLE',
-      'Job processing is temporarily unavailable. Please try again later.',
+      429,
+      'INTERVIEW_PREP_LIMIT',
+      `Maximum of ${MAX_INTERVIEW_PREPS_PER_APPLICATION} interview preps reached for this application.`,
     );
   }
 
-  return { jobId, status: 'processing' as const };
+  return insertAndEnqueue(userId, data.applicationId, 'interview-prep', 'interview-prep', {
+    applicationId: data.applicationId,
+  });
+}
+
+export async function enqueueResumeGapJob(userId: string, data: ResumeGapRequest) {
+  await applicationService.getApplication(userId, data.applicationId);
+
+  const [{ gapCount }] = await db
+    .select({ gapCount: sql<number>`count(*)::int` })
+    .from(resumeGapAnalyses)
+    .where(and(eq(resumeGapAnalyses.applicationId, data.applicationId), eq(resumeGapAnalyses.userId, userId)));
+
+  if (gapCount >= MAX_RESUME_GAPS_PER_APPLICATION) {
+    throw new AppError(
+      429,
+      'RESUME_GAP_LIMIT',
+      `Maximum of ${MAX_RESUME_GAPS_PER_APPLICATION} resume gap analyses reached for this application.`,
+    );
+  }
+
+  return insertAndEnqueue(userId, data.applicationId, 'resume-gap', 'resume-gap', {
+    applicationId: data.applicationId,
+  });
 }
 
 export async function saveAnalysisResult(

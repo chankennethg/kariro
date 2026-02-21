@@ -8,6 +8,8 @@ import {
   userProfiles,
   aiAnalyses,
   coverLetters,
+  interviewPreps,
+  resumeGapAnalyses,
 } from './tables.js';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -17,6 +19,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   profile: one(userProfiles),
   aiAnalyses: many(aiAnalyses),
   coverLetters: many(coverLetters),
+  interviewPreps: many(interviewPreps),
+  resumeGapAnalyses: many(resumeGapAnalyses),
 }));
 
 export const refreshTokensRelations = relations(refreshTokens, ({ one }) => ({
@@ -28,6 +32,8 @@ export const jobApplicationsRelations = relations(jobApplications, ({ one, many 
   jobApplicationTags: many(jobApplicationTags),
   aiAnalyses: many(aiAnalyses),
   coverLetters: many(coverLetters),
+  interviewPreps: many(interviewPreps),
+  resumeGapAnalyses: many(resumeGapAnalyses),
 }));
 
 export const tagsRelations = relations(tags, ({ one, many }) => ({
@@ -64,4 +70,20 @@ export const coverLettersRelations = relations(coverLetters, ({ one }) => ({
     references: [jobApplications.id],
   }),
   user: one(users, { fields: [coverLetters.userId], references: [users.id] }),
+}));
+
+export const interviewPrepsRelations = relations(interviewPreps, ({ one }) => ({
+  application: one(jobApplications, {
+    fields: [interviewPreps.applicationId],
+    references: [jobApplications.id],
+  }),
+  user: one(users, { fields: [interviewPreps.userId], references: [users.id] }),
+}));
+
+export const resumeGapAnalysesRelations = relations(resumeGapAnalyses, ({ one }) => ({
+  application: one(jobApplications, {
+    fields: [resumeGapAnalyses.applicationId],
+    references: [jobApplications.id],
+  }),
+  user: one(users, { fields: [resumeGapAnalyses.userId], references: [users.id] }),
 }));

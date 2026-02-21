@@ -76,6 +76,20 @@ vi.mock('@/db/schema/tables.js', () => ({
     content: 'content',
     createdAt: 'created_at',
   },
+  interviewPreps: {
+    id: 'id',
+    applicationId: 'application_id',
+    userId: 'user_id',
+    content: 'content',
+    createdAt: 'created_at',
+  },
+  resumeGapAnalyses: {
+    id: 'id',
+    applicationId: 'application_id',
+    userId: 'user_id',
+    content: 'content',
+    createdAt: 'created_at',
+  },
 }));
 
 vi.mock('@/lib/queue.js', () => ({
@@ -101,6 +115,8 @@ const applicationService = await import('@/services/application.service.js');
 const {
   enqueueAnalyzeJob,
   enqueueCoverLetterJob,
+  enqueueInterviewPrepJob,
+  enqueueResumeGapJob,
   getAnalysisByJobId,
   saveAnalysisResult,
   saveAnalysisError,
@@ -280,6 +296,168 @@ describe('AI Service', () => {
       await expect(
         enqueueCoverLetterJob(userId, { applicationId, tone: 'formal' }),
       ).rejects.toThrow('temporarily unavailable');
+
+      expect(mockDb._mockDelete).toHaveBeenCalled();
+    });
+  });
+
+  describe('enqueueInterviewPrepJob', () => {
+    const mockApp = {
+      id: applicationId,
+      userId,
+      companyName: 'Acme',
+      roleTitle: 'Engineer',
+      jobUrl: null,
+      jobDescription: 'TypeScript role',
+      status: 'saved' as const,
+      salaryMin: null,
+      salaryMax: null,
+      salaryCurrency: 'USD',
+      location: null,
+      workMode: null,
+      notes: null,
+      appliedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    it('enqueues job and returns jobId', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      // Per-application cap check → 0 preps
+      mockDb._mockWhere.mockResolvedValueOnce([{ prepCount: 0 }]);
+      // Queue limit check → 0 pending
+      mockDb._mockWhere.mockResolvedValueOnce([{ count: 0 }]);
+
+      const result = await enqueueInterviewPrepJob(userId, { applicationId });
+
+      expect(result.jobId).toBe(jobId);
+      expect(result.status).toBe('processing');
+      expect(aiQueue.add).toHaveBeenCalledWith(
+        'interview-prep',
+        expect.objectContaining({ userId, jobId, applicationId }),
+        expect.objectContaining({ jobId, attempts: 3 }),
+      );
+    });
+
+    it('rejects when application not found', async () => {
+      vi.mocked(applicationService.getApplication).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      await expect(enqueueInterviewPrepJob(userId, { applicationId })).rejects.toThrow(AppError);
+    });
+
+    it('rejects when per-application interview prep cap is reached', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      mockDb._mockWhere.mockResolvedValueOnce([{ prepCount: 10 }]);
+
+      await expect(enqueueInterviewPrepJob(userId, { applicationId })).rejects.toThrow(
+        'Maximum of 10 interview preps reached',
+      );
+    });
+
+    it('rejects when user has too many pending analyses', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      mockDb._mockWhere.mockResolvedValueOnce([{ prepCount: 0 }]);
+      mockDb._mockWhere.mockResolvedValueOnce([{ count: 10 }]);
+
+      await expect(enqueueInterviewPrepJob(userId, { applicationId })).rejects.toThrow(
+        'too many pending',
+      );
+    });
+
+    it('cleans up tracking row and throws 503 when queue is unavailable', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      mockDb._mockWhere.mockResolvedValueOnce([{ prepCount: 0 }]);
+      mockDb._mockWhere.mockResolvedValueOnce([{ count: 0 }]);
+      mockDb._mockDeleteWhere.mockResolvedValueOnce(undefined);
+      const { aiQueue } = await import('@/lib/queue.js');
+      vi.mocked(aiQueue.add).mockRejectedValueOnce(new Error('Redis connection refused'));
+
+      await expect(enqueueInterviewPrepJob(userId, { applicationId })).rejects.toThrow(
+        'temporarily unavailable',
+      );
+
+      expect(mockDb._mockDelete).toHaveBeenCalled();
+    });
+  });
+
+  describe('enqueueResumeGapJob', () => {
+    const mockApp = {
+      id: applicationId,
+      userId,
+      companyName: 'Acme',
+      roleTitle: 'Engineer',
+      jobUrl: null,
+      jobDescription: 'TypeScript role',
+      status: 'saved' as const,
+      salaryMin: null,
+      salaryMax: null,
+      salaryCurrency: 'USD',
+      location: null,
+      workMode: null,
+      notes: null,
+      appliedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    it('enqueues job and returns jobId', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      // Per-application cap check → 0 analyses
+      mockDb._mockWhere.mockResolvedValueOnce([{ gapCount: 0 }]);
+      // Queue limit check → 0 pending
+      mockDb._mockWhere.mockResolvedValueOnce([{ count: 0 }]);
+
+      const result = await enqueueResumeGapJob(userId, { applicationId });
+
+      expect(result.jobId).toBe(jobId);
+      expect(result.status).toBe('processing');
+      expect(aiQueue.add).toHaveBeenCalledWith(
+        'resume-gap',
+        expect.objectContaining({ userId, jobId, applicationId }),
+        expect.objectContaining({ jobId, attempts: 3 }),
+      );
+    });
+
+    it('rejects when application not found', async () => {
+      vi.mocked(applicationService.getApplication).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      await expect(enqueueResumeGapJob(userId, { applicationId })).rejects.toThrow(AppError);
+    });
+
+    it('rejects when per-application resume gap cap is reached', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      mockDb._mockWhere.mockResolvedValueOnce([{ gapCount: 10 }]);
+
+      await expect(enqueueResumeGapJob(userId, { applicationId })).rejects.toThrow(
+        'Maximum of 10 resume gap analyses reached',
+      );
+    });
+
+    it('rejects when user has too many pending analyses', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      mockDb._mockWhere.mockResolvedValueOnce([{ gapCount: 0 }]);
+      mockDb._mockWhere.mockResolvedValueOnce([{ count: 10 }]);
+
+      await expect(enqueueResumeGapJob(userId, { applicationId })).rejects.toThrow(
+        'too many pending',
+      );
+    });
+
+    it('cleans up tracking row and throws 503 when queue is unavailable', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce(mockApp);
+      mockDb._mockWhere.mockResolvedValueOnce([{ gapCount: 0 }]);
+      mockDb._mockWhere.mockResolvedValueOnce([{ count: 0 }]);
+      mockDb._mockDeleteWhere.mockResolvedValueOnce(undefined);
+      const { aiQueue } = await import('@/lib/queue.js');
+      vi.mocked(aiQueue.add).mockRejectedValueOnce(new Error('Redis connection refused'));
+
+      await expect(enqueueResumeGapJob(userId, { applicationId })).rejects.toThrow(
+        'temporarily unavailable',
+      );
 
       expect(mockDb._mockDelete).toHaveBeenCalled();
     });

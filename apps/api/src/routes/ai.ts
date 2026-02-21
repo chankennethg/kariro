@@ -5,6 +5,8 @@ import {
   EnqueuedJobSchema,
   AiAnalysisSchema,
   CoverLetterRequestSchema,
+  InterviewPrepRequestSchema,
+  ResumeGapRequestSchema,
 } from '@kariro/shared';
 import type { AuthUser } from '@/middleware/auth.js';
 import { AppError } from '@/middleware/error.js';
@@ -224,6 +226,134 @@ app.openapi(coverLetterRoute, async (c) => {
   const userId = c.get('user').id;
   const body = c.req.valid('json');
   const result = await aiService.enqueueCoverLetterJob(userId, body);
+  return c.json(
+    {
+      success: true as const,
+      data: result,
+      error: null,
+    },
+    202,
+  );
+});
+
+// ---- Generate Interview Prep ----
+
+const interviewPrepRoute = createRoute({
+  method: 'post',
+  path: '/ai/interview-prep',
+  tags: ['AI'],
+  summary: 'Generate interview preparation materials for a job application',
+  description: `Generate personalized technical and behavioral interview questions, company research tips, suggested questions to ask, and a preparation checklist for the specified job application.
+
+The application must have a \`jobDescription\`. Processing is asynchronous — poll \`GET /ai/jobs/{jobId}\` for results.
+
+**Rate limit:** 5 requests per minute. Max 10 concurrent pending jobs per user.`,
+  security: [{ Bearer: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: InterviewPrepRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    202: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: EnqueuedJobSchema,
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'Interview prep job enqueued for processing',
+    },
+    400: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Application has no job description',
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Application not found',
+    },
+    429: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Rate limit exceeded or too many pending jobs (max 10 per user)',
+    },
+  },
+});
+
+app.openapi(interviewPrepRoute, async (c) => {
+  const userId = c.get('user').id;
+  const body = c.req.valid('json');
+  const result = await aiService.enqueueInterviewPrepJob(userId, body);
+  return c.json(
+    {
+      success: true as const,
+      data: result,
+      error: null,
+    },
+    202,
+  );
+});
+
+// ---- Generate Resume Gap Analysis ----
+
+const resumeGapRoute = createRoute({
+  method: 'post',
+  path: '/ai/resume-gap',
+  tags: ['AI'],
+  summary: 'Analyze resume gaps for a job application',
+  description: `Compare the candidate's profile against the job requirements to identify matched skills, missing skills, overall fit percentage, resume improvement suggestions, and talking points.
+
+The application must have a \`jobDescription\`. Processing is asynchronous — poll \`GET /ai/jobs/{jobId}\` for results.
+
+**Rate limit:** 5 requests per minute. Max 10 concurrent pending jobs per user.`,
+  security: [{ Bearer: [] }],
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: ResumeGapRequestSchema,
+        },
+      },
+    },
+  },
+  responses: {
+    202: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: EnqueuedJobSchema,
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'Resume gap analysis job enqueued for processing',
+    },
+    400: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Application has no job description',
+    },
+    404: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Application not found',
+    },
+    429: {
+      content: { 'application/json': { schema: ErrorResponseSchema } },
+      description: 'Rate limit exceeded or too many pending jobs (max 10 per user)',
+    },
+  },
+});
+
+app.openapi(resumeGapRoute, async (c) => {
+  const userId = c.get('user').id;
+  const body = c.req.valid('json');
+  const result = await aiService.enqueueResumeGapJob(userId, body);
   return c.json(
     {
       success: true as const,

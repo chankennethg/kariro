@@ -72,6 +72,8 @@ vi.mock('@/services/profile.service.js', () => ({
 vi.mock('@/services/ai.service.js', () => ({
   enqueueAnalyzeJob: vi.fn(),
   enqueueCoverLetterJob: vi.fn(),
+  enqueueInterviewPrepJob: vi.fn(),
+  enqueueResumeGapJob: vi.fn(),
   getAnalysisByJobId: vi.fn(),
   saveAnalysisResult: vi.fn(),
   saveAnalysisError: vi.fn(),
@@ -89,6 +91,16 @@ vi.mock('@/lib/queue.js', () => ({
 
 vi.mock('@/middleware/rate-limit.js', () => ({
   rateLimiter: () => async (_c: unknown, next: () => Promise<void>) => { await next(); },
+}));
+
+vi.mock('@/services/interview-prep.service.js', () => ({
+  saveInterviewPrep: vi.fn(),
+  getInterviewPrepByApplicationId: vi.fn(),
+}));
+
+vi.mock('@/services/resume-gap.service.js', () => ({
+  saveResumeGapAnalysis: vi.fn(),
+  getResumeGapAnalysisByApplicationId: vi.fn(),
 }));
 
 const aiService = await import('@/services/ai.service.js');
@@ -272,6 +284,128 @@ describe('AI Routes', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicationId, tone: 'formal' }),
+      });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/v1/ai/interview-prep', () => {
+    const applicationId = '660e8400-e29b-41d4-a716-446655440001';
+
+    it('returns 202 with jobId when enqueued', async () => {
+      vi.mocked(aiService.enqueueInterviewPrepJob).mockResolvedValueOnce({
+        jobId,
+        status: 'processing',
+      });
+
+      const res = await app.request('/api/v1/ai/interview-prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ applicationId }),
+      });
+
+      expect(res.status).toBe(202);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.jobId).toBe(jobId);
+      expect(body.data.status).toBe('processing');
+      expect(aiService.enqueueInterviewPrepJob).toHaveBeenCalledWith(userId, { applicationId });
+    });
+
+    it('returns 400 when applicationId is missing', async () => {
+      const res = await app.request('/api/v1/ai/interview-prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(aiService.enqueueInterviewPrepJob).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request('/api/v1/ai/interview-prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ applicationId }),
+      });
+
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.errorCode).toBe('NOT_FOUND');
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request('/api/v1/ai/interview-prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId }),
+      });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('POST /api/v1/ai/resume-gap', () => {
+    const applicationId = '660e8400-e29b-41d4-a716-446655440001';
+
+    it('returns 202 with jobId when enqueued', async () => {
+      vi.mocked(aiService.enqueueResumeGapJob).mockResolvedValueOnce({
+        jobId,
+        status: 'processing',
+      });
+
+      const res = await app.request('/api/v1/ai/resume-gap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ applicationId }),
+      });
+
+      expect(res.status).toBe(202);
+      const body = await res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.jobId).toBe(jobId);
+      expect(body.data.status).toBe('processing');
+      expect(aiService.enqueueResumeGapJob).toHaveBeenCalledWith(userId, { applicationId });
+    });
+
+    it('returns 400 when applicationId is missing', async () => {
+      const res = await app.request('/api/v1/ai/resume-gap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({}),
+      });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(aiService.enqueueResumeGapJob).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request('/api/v1/ai/resume-gap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader },
+        body: JSON.stringify({ applicationId }),
+      });
+
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.errorCode).toBe('NOT_FOUND');
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request('/api/v1/ai/resume-gap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId }),
       });
 
       expect(res.status).toBe(401);

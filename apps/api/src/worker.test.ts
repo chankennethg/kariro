@@ -34,6 +34,26 @@ const mockProfile = {
   updatedAt: now,
 };
 
+const mockInterviewPrepResult = {
+  technicalQuestions: [
+    { question: 'Explain closures', suggestedAnswer: 'A closure...', difficulty: 'medium' as const },
+  ],
+  behavioralQuestions: [
+    { question: 'Tell me about a challenge', suggestedAnswer: 'STAR...', tip: 'Be specific' },
+  ],
+  companyResearchTips: ['Check their engineering blog'],
+  questionsToAsk: ['What does on-call look like?'],
+  preparationChecklist: ['Review TypeScript'],
+};
+
+const mockResumeGapResult = {
+  matchedSkills: [{ skill: 'TypeScript', evidenceFromResume: 'In experience section' }],
+  missingSkills: [{ skill: 'Kubernetes', importance: 'nice-to-have' as const, suggestion: 'Take a course' }],
+  overallMatch: 75,
+  resumeSuggestions: ['Quantify achievements'],
+  talkingPoints: ['Highlight TypeScript experience'],
+};
+
 // Mock AI SDK
 vi.mock('ai', () => ({
   generateObject: vi.fn().mockResolvedValue({ object: mockAnalysisResult }),
@@ -50,6 +70,14 @@ vi.mock('./lib/ai.js', () => ({
   buildCoverLetterPrompt: vi.fn().mockReturnValue({
     system: 'You are a cover letter writer',
     user: 'Write a cover letter',
+  }),
+  buildInterviewPrepPrompt: vi.fn().mockReturnValue({
+    system: 'You are an interview coach',
+    user: 'Generate interview prep',
+  }),
+  buildResumeGapPrompt: vi.fn().mockReturnValue({
+    system: 'You are a career coach',
+    user: 'Analyze resume gaps',
   }),
   fetchJobDescription: vi.fn().mockResolvedValue('Extracted job description text'),
 }));
@@ -72,6 +100,16 @@ vi.mock('./services/application.service.js', () => ({
 vi.mock('./services/cover-letter.service.js', () => ({
   saveCoverLetter: vi.fn(),
   getCoverLettersByApplicationId: vi.fn(),
+}));
+
+vi.mock('./services/interview-prep.service.js', () => ({
+  saveInterviewPrep: vi.fn(),
+  getInterviewPrepByApplicationId: vi.fn(),
+}));
+
+vi.mock('./services/resume-gap.service.js', () => ({
+  saveResumeGapAnalysis: vi.fn(),
+  getResumeGapAnalysisByApplicationId: vi.fn(),
 }));
 
 // Mock DB for cover letter worker (aiAnalyses query)
@@ -122,6 +160,8 @@ const aiService = await import('./services/ai.service.js');
 const profileService = await import('./services/profile.service.js');
 const applicationService = await import('./services/application.service.js');
 const coverLetterService = await import('./services/cover-letter.service.js');
+const interviewPrepService = await import('./services/interview-prep.service.js');
+const resumeGapService = await import('./services/resume-gap.service.js');
 
 // Import worker to register the processor
 await import('./worker.js');
@@ -298,6 +338,128 @@ describe('Worker', () => {
       const job = {
         name: 'generate-cover-letter',
         data: { userId, jobId, applicationId, tone: 'confident' },
+      };
+
+      await expect(workerProcessor(job)).rejects.toThrow('AI provider timeout');
+      expect(aiService.saveAnalysisError).toHaveBeenCalledWith(
+        jobId,
+        'Request timed out while processing',
+      );
+    });
+  });
+
+  describe('interview-prep job', () => {
+    const applicationId = mockApplication.id;
+
+    it('generates interview prep and saves it', async () => {
+      vi.mocked(generateObject).mockResolvedValueOnce({
+        object: mockInterviewPrepResult,
+        toJsonResponse: vi.fn(),
+      } as never);
+
+      const job = {
+        name: 'interview-prep',
+        data: { userId, jobId, applicationId },
+      };
+
+      await workerProcessor(job);
+
+      expect(generateObject).toHaveBeenCalled();
+      expect(interviewPrepService.saveInterviewPrep).toHaveBeenCalledWith(
+        userId,
+        applicationId,
+        mockInterviewPrepResult,
+      );
+      expect(aiService.saveAnalysisResult).toHaveBeenCalledWith(
+        jobId,
+        mockInterviewPrepResult,
+        applicationId,
+      );
+    });
+
+    it('throws when application has no job description', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce({
+        ...mockApplication,
+        jobDescription: null,
+      });
+
+      const job = {
+        name: 'interview-prep',
+        data: { userId, jobId, applicationId },
+      };
+
+      await expect(workerProcessor(job)).rejects.toThrow();
+      expect(aiService.saveAnalysisError).toHaveBeenCalled();
+      expect(interviewPrepService.saveInterviewPrep).not.toHaveBeenCalled();
+    });
+
+    it('saves sanitized error when generateObject fails', async () => {
+      vi.mocked(generateObject).mockRejectedValueOnce(new Error('AI provider timeout'));
+
+      const job = {
+        name: 'interview-prep',
+        data: { userId, jobId, applicationId },
+      };
+
+      await expect(workerProcessor(job)).rejects.toThrow('AI provider timeout');
+      expect(aiService.saveAnalysisError).toHaveBeenCalledWith(
+        jobId,
+        'Request timed out while processing',
+      );
+    });
+  });
+
+  describe('resume-gap job', () => {
+    const applicationId = mockApplication.id;
+
+    it('generates resume gap analysis and saves it', async () => {
+      vi.mocked(generateObject).mockResolvedValueOnce({
+        object: mockResumeGapResult,
+        toJsonResponse: vi.fn(),
+      } as never);
+
+      const job = {
+        name: 'resume-gap',
+        data: { userId, jobId, applicationId },
+      };
+
+      await workerProcessor(job);
+
+      expect(generateObject).toHaveBeenCalled();
+      expect(resumeGapService.saveResumeGapAnalysis).toHaveBeenCalledWith(
+        userId,
+        applicationId,
+        mockResumeGapResult,
+      );
+      expect(aiService.saveAnalysisResult).toHaveBeenCalledWith(
+        jobId,
+        mockResumeGapResult,
+        applicationId,
+      );
+    });
+
+    it('throws when application has no job description', async () => {
+      vi.mocked(applicationService.getApplication).mockResolvedValueOnce({
+        ...mockApplication,
+        jobDescription: null,
+      });
+
+      const job = {
+        name: 'resume-gap',
+        data: { userId, jobId, applicationId },
+      };
+
+      await expect(workerProcessor(job)).rejects.toThrow();
+      expect(aiService.saveAnalysisError).toHaveBeenCalled();
+      expect(resumeGapService.saveResumeGapAnalysis).not.toHaveBeenCalled();
+    });
+
+    it('saves sanitized error when generateObject fails', async () => {
+      vi.mocked(generateObject).mockRejectedValueOnce(new Error('AI provider timeout'));
+
+      const job = {
+        name: 'resume-gap',
+        data: { userId, jobId, applicationId },
       };
 
       await expect(workerProcessor(job)).rejects.toThrow('AI provider timeout');

@@ -8,11 +8,17 @@ import {
   ListApplicationsQuerySchema,
   AttachTagsSchema,
   CoverLetterSchema,
+  InterviewPrepResponseSchema,
+  InterviewPrepResultSchema,
+  ResumeGapResponseSchema,
+  ResumeGapResultSchema,
 } from '@kariro/shared';
 import type { AuthUser } from '@/middleware/auth.js';
 import * as applicationService from '@/services/application.service.js';
 import * as tagService from '@/services/tag.service.js';
 import * as coverLetterService from '@/services/cover-letter.service.js';
+import * as interviewPrepService from '@/services/interview-prep.service.js';
+import * as resumeGapService from '@/services/resume-gap.service.js';
 
 const app = new OpenAPIHono<{ Variables: { user: AuthUser } }>();
 
@@ -356,6 +362,140 @@ app.openapi(listCoverLettersRoute, async (c) => {
     {
       success: true as const,
       data: letters.map((l) => ({ ...l, createdAt: l.createdAt.toISOString() })),
+      error: null,
+    },
+    200,
+  );
+});
+
+// ---- Interview Prep ----
+
+const getInterviewPrepRoute = createRoute({
+  method: 'get',
+  path: '/applications/{id}/interview-prep',
+  tags: ['Applications', 'AI'],
+  summary: 'Get the most recent interview prep for a job application',
+  description: `Returns the most recent AI-generated interview preparation materials for the specified application, or \`null\` if none exist yet.
+
+Ownership is verified — users can only access their own applications' interview prep.`,
+  security: [{ Bearer: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: InterviewPrepResponseSchema.nullable(),
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'Interview prep result, or null if not yet generated',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            data: z.null(),
+            error: z.string(),
+            errorCode: z.string(),
+          }),
+        },
+      },
+      description: 'Application not found',
+    },
+  },
+});
+
+app.openapi(getInterviewPrepRoute, async (c) => {
+  const userId = c.get('user').id;
+  const { id } = c.req.valid('param');
+  const prep = await interviewPrepService.getInterviewPrepByApplicationId(userId, id);
+  return c.json(
+    {
+      success: true as const,
+      data: (() => {
+        if (!prep) return null;
+        const parsed = InterviewPrepResultSchema.safeParse(prep.content);
+        if (!parsed.success) return null;
+        return {
+          id: prep.id,
+          applicationId: prep.applicationId,
+          content: parsed.data,
+          createdAt: prep.createdAt.toISOString(),
+        };
+      })(),
+      error: null,
+    },
+    200,
+  );
+});
+
+// ---- Resume Gap Analysis ----
+
+const getResumeGapRoute = createRoute({
+  method: 'get',
+  path: '/applications/{id}/resume-gap',
+  tags: ['Applications', 'AI'],
+  summary: 'Get the most recent resume gap analysis for a job application',
+  description: `Returns the most recent AI-generated resume gap analysis for the specified application, or \`null\` if none exist yet.
+
+Ownership is verified — users can only access their own applications' resume gap analyses.`,
+  security: [{ Bearer: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: ResumeGapResponseSchema.nullable(),
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'Resume gap analysis result, or null if not yet generated',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            data: z.null(),
+            error: z.string(),
+            errorCode: z.string(),
+          }),
+        },
+      },
+      description: 'Application not found',
+    },
+  },
+});
+
+app.openapi(getResumeGapRoute, async (c) => {
+  const userId = c.get('user').id;
+  const { id } = c.req.valid('param');
+  const analysis = await resumeGapService.getResumeGapAnalysisByApplicationId(userId, id);
+  return c.json(
+    {
+      success: true as const,
+      data: (() => {
+        if (!analysis) return null;
+        const parsed = ResumeGapResultSchema.safeParse(analysis.content);
+        if (!parsed.success) return null;
+        return {
+          id: analysis.id,
+          applicationId: analysis.applicationId,
+          content: parsed.data,
+          createdAt: analysis.createdAt.toISOString(),
+        };
+      })(),
       error: null,
     },
     200,

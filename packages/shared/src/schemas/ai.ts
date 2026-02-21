@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { CoverLetterResultSchema } from './cover-letter.js';
+import { InterviewPrepResultSchema } from './interview-prep.js';
+import { ResumeGapResultSchema } from './resume-gap.js';
 
 // --- Analysis statuses ---
 
@@ -54,7 +56,7 @@ export const AiAnalysisSchema = z.object({
   jobId: z.string(),
   type: z.string(),
   status: AnalysisStatusSchema,
-  result: z.union([JobAnalysisResultSchema, CoverLetterResultSchema]).nullable(),
+  result: z.union([JobAnalysisResultSchema, CoverLetterResultSchema, InterviewPrepResultSchema, ResumeGapResultSchema]).nullable(),
   error: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),

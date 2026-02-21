@@ -61,6 +61,24 @@ export {
 } from './schemas/ai.js';
 
 export {
+  InterviewPrepRequestSchema,
+  type InterviewPrepRequest,
+  InterviewPrepResultSchema,
+  type InterviewPrepResult,
+  InterviewPrepResponseSchema,
+  type InterviewPrepResponse,
+} from './schemas/interview-prep.js';
+
+export {
+  ResumeGapRequestSchema,
+  type ResumeGapRequest,
+  ResumeGapResultSchema,
+  type ResumeGapResult,
+  ResumeGapResponseSchema,
+  type ResumeGapResponse,
+} from './schemas/resume-gap.js';
+
+export {
   tones,
   type CoverLetterTone,
   CoverLetterRequestSchema,

@@ -173,6 +173,50 @@ export const coverLetters = pgTable(
   ],
 );
 
+// ---- Interview Preps ----
+
+// Interview preps are immutable after creation — updatedAt is intentionally omitted.
+export const interviewPreps = pgTable(
+  'interview_preps',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => jobApplications.id, { onDelete: 'cascade' }),
+    content: jsonb('content').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('interview_preps_user_id_idx').on(t.userId),
+    index('interview_preps_application_id_idx').on(t.applicationId),
+  ],
+);
+
+// ---- Resume Gap Analyses ----
+
+// Resume gap analyses are immutable after creation — updatedAt is intentionally omitted.
+export const resumeGapAnalyses = pgTable(
+  'resume_gap_analyses',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    applicationId: uuid('application_id')
+      .notNull()
+      .references(() => jobApplications.id, { onDelete: 'cascade' }),
+    content: jsonb('content').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('resume_gap_analyses_user_id_idx').on(t.userId),
+    index('resume_gap_analyses_application_id_idx').on(t.applicationId),
+  ],
+);
+
 // ---- AI Analyses ----
 
 export const aiAnalyses = pgTable(

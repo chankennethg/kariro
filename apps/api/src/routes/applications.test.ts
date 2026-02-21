@@ -61,6 +61,8 @@ vi.mock('@/services/profile.service.js', () => ({
 vi.mock('@/services/ai.service.js', () => ({
   enqueueAnalyzeJob: vi.fn(),
   enqueueCoverLetterJob: vi.fn(),
+  enqueueInterviewPrepJob: vi.fn(),
+  enqueueResumeGapJob: vi.fn(),
   getAnalysisByJobId: vi.fn(),
   saveAnalysisResult: vi.fn(),
   saveAnalysisError: vi.fn(),
@@ -69,6 +71,16 @@ vi.mock('@/services/ai.service.js', () => ({
 vi.mock('@/services/cover-letter.service.js', () => ({
   saveCoverLetter: vi.fn(),
   getCoverLettersByApplicationId: vi.fn(),
+}));
+
+vi.mock('@/services/interview-prep.service.js', () => ({
+  saveInterviewPrep: vi.fn(),
+  getInterviewPrepByApplicationId: vi.fn(),
+}));
+
+vi.mock('@/services/resume-gap.service.js', () => ({
+  saveResumeGapAnalysis: vi.fn(),
+  getResumeGapAnalysisByApplicationId: vi.fn(),
 }));
 
 vi.mock('@/lib/queue.js', () => ({
@@ -83,6 +95,8 @@ vi.mock('@/middleware/rate-limit.js', () => ({
 
 const applicationService = await import('@/services/application.service.js');
 const coverLetterService = await import('@/services/cover-letter.service.js');
+const interviewPrepService = await import('@/services/interview-prep.service.js');
+const resumeGapService = await import('@/services/resume-gap.service.js');
 const authService = await import('@/services/auth.service.js');
 const app = (await import('../app.js')).default;
 
@@ -270,6 +284,136 @@ describe('Application Routes', () => {
     it('returns 401 without auth token', async () => {
       const res = await app.request(
         `/api/v1/applications/${mockApplication.id}/cover-letters`,
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/applications/:id/interview-prep', () => {
+    const mockPrep = {
+      id: 'bbb00000-0000-0000-0000-000000000001',
+      applicationId: mockApplication.id,
+      userId,
+      content: {
+        technicalQuestions: [],
+        behavioralQuestions: [],
+        companyResearchTips: ['Research the team'],
+        questionsToAsk: ['What does success look like?'],
+        preparationChecklist: ['Practice TypeScript'],
+      },
+      createdAt: now,
+    };
+
+    it('returns the most recent interview prep', async () => {
+      vi.mocked(interviewPrepService.getInterviewPrepByApplicationId).mockResolvedValueOnce(mockPrep);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/interview-prep`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { id: string } };
+      expect(body.success).toBe(true);
+      expect(body.data.id).toBe(mockPrep.id);
+    });
+
+    it('returns null when no interview prep exists', async () => {
+      vi.mocked(interviewPrepService.getInterviewPrepByApplicationId).mockResolvedValueOnce(null);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/interview-prep`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: null };
+      expect(body.success).toBe(true);
+      expect(body.data).toBeNull();
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(interviewPrepService.getInterviewPrepByApplicationId).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/interview-prep`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/interview-prep`,
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/applications/:id/resume-gap', () => {
+    const mockAnalysis = {
+      id: 'ccc00000-0000-0000-0000-000000000001',
+      applicationId: mockApplication.id,
+      userId,
+      content: {
+        matchedSkills: [{ skill: 'TypeScript', evidenceFromResume: 'In experience section' }],
+        missingSkills: [],
+        overallMatch: 80,
+        resumeSuggestions: ['Quantify achievements'],
+        talkingPoints: ['Highlight TypeScript experience'],
+      },
+      createdAt: now,
+    };
+
+    it('returns the most recent resume gap analysis', async () => {
+      vi.mocked(resumeGapService.getResumeGapAnalysisByApplicationId).mockResolvedValueOnce(mockAnalysis);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/resume-gap`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { id: string } };
+      expect(body.success).toBe(true);
+      expect(body.data.id).toBe(mockAnalysis.id);
+    });
+
+    it('returns null when no resume gap analysis exists', async () => {
+      vi.mocked(resumeGapService.getResumeGapAnalysisByApplicationId).mockResolvedValueOnce(null);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/resume-gap`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: null };
+      expect(body.success).toBe(true);
+      expect(body.data).toBeNull();
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(resumeGapService.getResumeGapAnalysisByApplicationId).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/resume-gap`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/resume-gap`,
       );
       expect(res.status).toBe(401);
     });

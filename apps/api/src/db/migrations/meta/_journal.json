@@ -36,6 +36,13 @@
       "when": 1771586200715,
       "tag": "0004_add_cover_letters",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771604729178,
+      "tag": "0005_add_interview_preps_and_resume_gap_analyses",
+      "breakpoints": true
     }
   ]
 }

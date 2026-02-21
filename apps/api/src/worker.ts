@@ -2,17 +2,27 @@ import { Worker } from 'bullmq';
 import type { Job } from 'bullmq';
 import { generateObject, generateText } from 'ai';
 import { and, eq, desc } from 'drizzle-orm';
-import { JobAnalysisResultSchema } from '@kariro/shared';
-import type { CreateApplication, JobAnalysisResult, CoverLetterTone, CoverLetterResult } from '@kariro/shared';
+import { z } from 'zod';
+import { JobAnalysisResultSchema, InterviewPrepResultSchema, ResumeGapResultSchema } from '@kariro/shared';
+import type { CreateApplication, JobAnalysisResult, CoverLetterTone, CoverLetterResult, Profile } from '@kariro/shared';
 import { connection } from './lib/queue.js';
 import { db } from './db/index.js';
 import { aiAnalyses } from './db/schema/tables.js';
-import { getAiModel, buildAnalyzeJobPrompt, buildCoverLetterPrompt, fetchJobDescription } from './lib/ai.js';
+import {
+  getAiModel,
+  buildAnalyzeJobPrompt,
+  buildCoverLetterPrompt,
+  buildInterviewPrepPrompt,
+  buildResumeGapPrompt,
+  fetchJobDescription,
+} from './lib/ai.js';
 import { log } from './lib/logger.js';
 import * as aiService from './services/ai.service.js';
 import * as profileService from './services/profile.service.js';
 import * as applicationService from './services/application.service.js';
 import * as coverLetterService from './services/cover-letter.service.js';
+import * as interviewPrepService from './services/interview-prep.service.js';
+import * as resumeGapService from './services/resume-gap.service.js';
 
 interface AnalyzeJobData {
   userId: string;
@@ -28,6 +38,18 @@ interface CoverLetterJobData {
   jobId: string;
   applicationId: string;
   tone: CoverLetterTone;
+}
+
+interface InterviewPrepJobData {
+  userId: string;
+  jobId: string;
+  applicationId: string;
+}
+
+interface ResumeGapJobData {
+  userId: string;
+  jobId: string;
+  applicationId: string;
 }
 
 type UserProfile = NonNullable<Awaited<ReturnType<typeof profileService.getProfile>>>;
@@ -55,12 +77,13 @@ function toProfileForPrompt(profile: UserProfile) {
   };
 }
 
-async function fetchLatestAnalysis(applicationId: string): Promise<JobAnalysisResult | null> {
+async function fetchLatestAnalysis(userId: string, applicationId: string): Promise<JobAnalysisResult | null> {
   const [latest] = await db
     .select()
     .from(aiAnalyses)
     .where(
       and(
+        eq(aiAnalyses.userId, userId),
         eq(aiAnalyses.applicationId, applicationId),
         eq(aiAnalyses.type, 'analyze-job'),
         eq(aiAnalyses.status, 'completed'),
@@ -143,7 +166,7 @@ async function processGenerateCoverLetter(job: Job<CoverLetterJobData>) {
     }
 
     const [latestAnalysis, userProfile] = await Promise.all([
-      fetchLatestAnalysis(applicationId),
+      fetchLatestAnalysis(userId, applicationId),
       profileService.getProfile(userId),
     ]);
 
@@ -179,6 +202,77 @@ async function processGenerateCoverLetter(job: Job<CoverLetterJobData>) {
   }
 }
 
+type ApplicationForPrompt = { companyName: string; roleTitle: string; jobDescription: string | null };
+
+async function processObjectGenerationJob<T>(
+  job: Job<{ userId: string; jobId: string; applicationId: string }>,
+  options: {
+    schema: z.ZodType<T>;
+    buildPrompt: (app: ApplicationForPrompt, profile: Profile | null, analysis?: JobAnalysisResult | null) => { system: string; user: string };
+    saveResult: (userId: string, applicationId: string, result: T) => Promise<unknown>;
+    logLabel: string;
+    noDescriptionError: string;
+  },
+) {
+  const { userId, jobId, applicationId } = job.data;
+
+  try {
+    const application = await applicationService.getApplication(userId, applicationId);
+
+    if (!application.jobDescription) {
+      throw new Error(options.noDescriptionError);
+    }
+
+    const [latestAnalysis, userProfile] = await Promise.all([
+      fetchLatestAnalysis(userId, applicationId),
+      profileService.getProfile(userId),
+    ]);
+
+    const profileForPrompt = userProfile ? toProfileForPrompt(userProfile) : null;
+    const model = getAiModel();
+    const prompt = options.buildPrompt(application, profileForPrompt as Profile | null, latestAnalysis);
+
+    const { object: result } = await generateObject({
+      model,
+      schema: options.schema,
+      system: prompt.system,
+      prompt: prompt.user,
+    });
+
+    await options.saveResult(userId, applicationId, result);
+    await aiService.saveAnalysisResult(jobId, result as Record<string, unknown>, applicationId);
+
+    log.info({ jobId }, `${options.logLabel} completed`);
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : 'Unknown error';
+    await aiService.saveAnalysisError(jobId, sanitizeWorkerError(error));
+    log.error({ jobId, error: rawMessage }, `${options.logLabel} failed`);
+    throw error;
+  }
+}
+
+async function processInterviewPrep(job: Job<InterviewPrepJobData>) {
+  return processObjectGenerationJob(job, {
+    schema: InterviewPrepResultSchema,
+    buildPrompt: buildInterviewPrepPrompt,
+    saveResult: (userId, applicationId, result) =>
+      interviewPrepService.saveInterviewPrep(userId, applicationId, result),
+    logLabel: 'interview-prep',
+    noDescriptionError: 'No job description available for interview prep generation',
+  });
+}
+
+async function processResumeGap(job: Job<ResumeGapJobData>) {
+  return processObjectGenerationJob(job, {
+    schema: ResumeGapResultSchema,
+    buildPrompt: buildResumeGapPrompt,
+    saveResult: (userId, applicationId, result) =>
+      resumeGapService.saveResumeGapAnalysis(userId, applicationId, result),
+    logLabel: 'resume-gap',
+    noDescriptionError: 'No job description available for resume gap analysis',
+  });
+}
+
 const worker = new Worker<AnalyzeJobData>(
   'ai-jobs',
   async (job) => {
@@ -187,6 +281,10 @@ const worker = new Worker<AnalyzeJobData>(
         return processAnalyzeJob(job as Job<AnalyzeJobData>);
       case 'generate-cover-letter':
         return processGenerateCoverLetter(job as Job<CoverLetterJobData>);
+      case 'interview-prep':
+        return processInterviewPrep(job as Job<InterviewPrepJobData>);
+      case 'resume-gap':
+        return processResumeGap(job as Job<ResumeGapJobData>);
       default:
         throw new Error(`Unknown job type: ${job.name}`);
     }
