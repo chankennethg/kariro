@@ -56,6 +56,8 @@ export {
   type JobAnalysisResult,
   AiAnalysisSchema,
   type AiAnalysis,
+  JobAnalysisForApplicationSchema,
+  type JobAnalysisForApplication,
   EnqueuedJobSchema,
   type EnqueuedJob,
 } from './schemas/ai.js';

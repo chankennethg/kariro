@@ -37,6 +37,7 @@ vi.mock('@/services/tag.service.js', () => ({
   createTag: vi.fn(),
   listTags: vi.fn(),
   deleteTag: vi.fn(),
+  getTagsForApplication: vi.fn(),
 }));
 
 // Mock auth service so requireAuth middleware passes
@@ -64,6 +65,7 @@ vi.mock('@/services/ai.service.js', () => ({
   enqueueInterviewPrepJob: vi.fn(),
   enqueueResumeGapJob: vi.fn(),
   getAnalysisByJobId: vi.fn(),
+  getJobAnalysisByApplicationId: vi.fn(),
   saveAnalysisResult: vi.fn(),
   saveAnalysisError: vi.fn(),
 }));
@@ -97,6 +99,8 @@ const applicationService = await import('@/services/application.service.js');
 const coverLetterService = await import('@/services/cover-letter.service.js');
 const interviewPrepService = await import('@/services/interview-prep.service.js');
 const resumeGapService = await import('@/services/resume-gap.service.js');
+const aiService = await import('@/services/ai.service.js');
+const tagService = await import('@/services/tag.service.js');
 const authService = await import('@/services/auth.service.js');
 const app = (await import('../app.js')).default;
 
@@ -414,6 +418,149 @@ describe('Application Routes', () => {
     it('returns 401 without auth token', async () => {
       const res = await app.request(
         `/api/v1/applications/${mockApplication.id}/resume-gap`,
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/applications/:id/ai-analysis', () => {
+    const mockAiAnalysis = {
+      id: 'ddd00000-0000-0000-0000-000000000001',
+      userId,
+      applicationId: mockApplication.id,
+      jobId: 'job-001',
+      type: 'analyze-job',
+      status: 'completed' as const,
+      result: {
+        companyName: 'Acme Corp',
+        roleTitle: 'Software Engineer',
+        location: 'New York',
+        workMode: 'hybrid' as const,
+        salaryRange: null,
+        requiredSkills: ['TypeScript'],
+        niceToHaveSkills: [],
+        experienceLevel: 'mid' as const,
+        keyResponsibilities: ['Build stuff'],
+        redFlags: [],
+        fitScore: 85,
+        fitExplanation: 'Good match',
+        missingSkills: [],
+        summary: 'A great role',
+      },
+      error: null,
+      input: {},
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    it('returns the latest AI analysis when it exists', async () => {
+      vi.mocked(aiService.getJobAnalysisByApplicationId).mockResolvedValueOnce(mockAiAnalysis);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/ai-analysis`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { id: string; content: { fitScore: number } } };
+      expect(body.success).toBe(true);
+      expect(body.data.id).toBe(mockAiAnalysis.id);
+      expect(body.data.content.fitScore).toBe(85);
+    });
+
+    it('returns null when no analysis exists', async () => {
+      vi.mocked(aiService.getJobAnalysisByApplicationId).mockResolvedValueOnce(null);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/ai-analysis`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: null };
+      expect(body.success).toBe(true);
+      expect(body.data).toBeNull();
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(aiService.getJobAnalysisByApplicationId).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/ai-analysis`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(404);
+      const body = (await res.json()) as { errorCode: string };
+      expect(body.errorCode).toBe('NOT_FOUND');
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/ai-analysis`,
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/applications/:id/tags', () => {
+    const mockTag = {
+      id: '770e8400-e29b-41d4-a716-446655440002',
+      userId,
+      name: 'Backend',
+      color: '#3B82F6',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    it('returns tags for the application', async () => {
+      vi.mocked(tagService.getTagsForApplication).mockResolvedValueOnce([mockTag]);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/tags`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { success: boolean; data: { name: string }[] };
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0].name).toBe('Backend');
+    });
+
+    it('returns empty array when application has no tags', async () => {
+      vi.mocked(tagService.getTagsForApplication).mockResolvedValueOnce([]);
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/tags`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { data: unknown[] };
+      expect(body.data).toHaveLength(0);
+    });
+
+    it('returns 404 when application not found', async () => {
+      const { AppError } = await import('@/middleware/error.js');
+      vi.mocked(tagService.getTagsForApplication).mockRejectedValueOnce(
+        new AppError(404, 'NOT_FOUND', 'Application not found'),
+      );
+
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/tags`,
+        { headers: authHeader },
+      );
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 401 without auth token', async () => {
+      const res = await app.request(
+        `/api/v1/applications/${mockApplication.id}/tags`,
       );
       expect(res.status).toBe(401);
     });

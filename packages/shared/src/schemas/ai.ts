@@ -63,6 +63,18 @@ export const AiAnalysisSchema = z.object({
 });
 export type AiAnalysis = z.infer<typeof AiAnalysisSchema>;
 
+// --- Response: job analysis for a specific application ---
+
+export const JobAnalysisForApplicationSchema = z.object({
+  id: z.string().uuid(),
+  applicationId: z.string().uuid().nullable(),
+  jobId: z.string(),
+  content: JobAnalysisResultSchema,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type JobAnalysisForApplication = z.infer<typeof JobAnalysisForApplicationSchema>;
+
 // --- Response: enqueue confirmation ---
 
 export const EnqueuedJobSchema = z.object({

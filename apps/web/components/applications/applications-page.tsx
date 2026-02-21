@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { Application, ApplicationStatus, Tag, CreateApplication } from '@kariro/shared';
 import { applicationStatuses } from '@kariro/shared';
-import { MoreHorizontal } from 'lucide-react';
+import { Eye, MoreHorizontal } from 'lucide-react';
 import { apiClient, apiClientCursor } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { statusLabels, workModeLabels } from '@/lib/constants';
@@ -35,6 +36,7 @@ import { TagManager } from './tag-manager';
 import { StatusBadge } from './status-badge';
 
 export function ApplicationsPage() {
+  const router = useRouter();
   const { isLoading: isAuthLoading } = useAuth();
 
   // Data
@@ -354,7 +356,11 @@ export function ApplicationsPage() {
               </TableRow>
             ) : (
               applications.map((app) => (
-                <TableRow key={app.id}>
+                <TableRow
+                  key={app.id}
+                  className="cursor-pointer"
+                  onClick={() => router.push(`/dashboard/applications/${app.id}`)}
+                >
                   <TableCell className="font-medium">{app.companyName}</TableCell>
                   <TableCell>{app.roleTitle}</TableCell>
                   <TableCell>
@@ -372,12 +378,22 @@ export function ApplicationsPage() {
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="size-8 p-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-8 p-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <MoreHorizontal className="size-4" />
                           <span className="sr-only">Actions</span>
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => router.push(`/dashboard/applications/${app.id}`)}>
+                          <Eye className="mr-2 size-4" />
+                          View
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => setEditingApp(app)}>
                           Edit
                         </DropdownMenuItem>

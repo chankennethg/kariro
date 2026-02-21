@@ -31,6 +31,8 @@ vi.mock('@/db/index.js', () => {
   const mockWhere = vi.fn();
   const mockDeleteWhere = vi.fn();
   const mockSetWhere = vi.fn();
+  const mockLimit = vi.fn();
+  const mockOrderBy = vi.fn(() => ({ limit: mockLimit }));
   const mockSet = vi.fn(() => ({ where: mockSetWhere }));
   const mockFrom = vi.fn(() => ({ where: mockWhere }));
   const mockSelect = vi.fn(() => ({ from: mockFrom }));
@@ -46,6 +48,8 @@ vi.mock('@/db/index.js', () => {
       delete: mockDelete,
       _mockValues: mockValues,
       _mockWhere: mockWhere,
+      _mockOrderBy: mockOrderBy,
+      _mockLimit: mockLimit,
       _mockSet: mockSet,
       _mockSetWhere: mockSetWhere,
       _mockDelete: mockDelete,
@@ -67,6 +71,10 @@ vi.mock('@/db/schema/tables.js', () => ({
     error: 'error',
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+  },
+  jobApplications: {
+    id: 'id',
+    userId: 'user_id',
   },
   coverLetters: {
     id: 'id',
@@ -105,6 +113,8 @@ const { db } = await import('@/db/index.js');
 const mockDb = db as typeof db & {
   _mockValues: ReturnType<typeof vi.fn>;
   _mockWhere: ReturnType<typeof vi.fn>;
+  _mockOrderBy: ReturnType<typeof vi.fn>;
+  _mockLimit: ReturnType<typeof vi.fn>;
   _mockSet: ReturnType<typeof vi.fn>;
   _mockSetWhere: ReturnType<typeof vi.fn>;
   _mockDelete: ReturnType<typeof vi.fn>;
@@ -118,6 +128,7 @@ const {
   enqueueInterviewPrepJob,
   enqueueResumeGapJob,
   getAnalysisByJobId,
+  getJobAnalysisByApplicationId,
   saveAnalysisResult,
   saveAnalysisError,
 } = await import('./ai.service.js');
@@ -128,6 +139,10 @@ describe('AI Service', () => {
     // Reset the where mock's once-queue so leftover values from early-exit tests
     // don't leak into subsequent tests.
     mockDb._mockWhere.mockReset();
+    mockDb._mockOrderBy.mockReset();
+    mockDb._mockLimit.mockReset();
+    // Restore default: orderBy returns { limit }
+    mockDb._mockOrderBy.mockReturnValue({ limit: mockDb._mockLimit });
   });
 
   describe('enqueueAnalyzeJob', () => {
@@ -534,6 +549,62 @@ describe('AI Service', () => {
       expect(mockDb._mockSet).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'failed', error: 'AI provider timeout' }),
       );
+    });
+  });
+
+  describe('getJobAnalysisByApplicationId', () => {
+    const mockApp = {
+      id: applicationId,
+      userId,
+      companyName: 'Acme',
+      roleTitle: 'Engineer',
+      status: 'saved' as const,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const mockAnalysis = {
+      id: 'ccc00000-0000-0000-0000-000000000001',
+      userId,
+      applicationId,
+      jobId,
+      type: 'analyze-job',
+      status: 'completed' as const,
+      result: { companyName: 'Acme' },
+      error: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    it('returns the latest completed analysis when found', async () => {
+      // First query: verify ownership — returns app
+      mockDb._mockWhere.mockResolvedValueOnce([mockApp]);
+      // Second query: .where().orderBy().limit() chain
+      mockDb._mockWhere.mockReturnValueOnce({ orderBy: mockDb._mockOrderBy });
+      mockDb._mockLimit.mockResolvedValueOnce([mockAnalysis]);
+
+      const result = await getJobAnalysisByApplicationId(userId, applicationId);
+
+      expect(result).not.toBeNull();
+      expect(result?.jobId).toBe(jobId);
+    });
+
+    it('returns null when no completed analysis exists', async () => {
+      mockDb._mockWhere.mockResolvedValueOnce([mockApp]);
+      mockDb._mockWhere.mockReturnValueOnce({ orderBy: mockDb._mockOrderBy });
+      mockDb._mockLimit.mockResolvedValueOnce([]);
+
+      const result = await getJobAnalysisByApplicationId(userId, applicationId);
+
+      expect(result).toBeNull();
+    });
+
+    it('throws 404 when application not found', async () => {
+      mockDb._mockWhere.mockResolvedValueOnce([]);
+
+      await expect(
+        getJobAnalysisByApplicationId(userId, applicationId),
+      ).rejects.toThrow('Application not found');
     });
   });
 });

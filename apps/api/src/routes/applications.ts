@@ -7,11 +7,14 @@ import {
   UpdateApplicationStatusSchema,
   ListApplicationsQuerySchema,
   AttachTagsSchema,
+  TagSchema,
   CoverLetterSchema,
   InterviewPrepResponseSchema,
   InterviewPrepResultSchema,
   ResumeGapResponseSchema,
   ResumeGapResultSchema,
+  JobAnalysisForApplicationSchema,
+  JobAnalysisResultSchema,
 } from '@kariro/shared';
 import type { AuthUser } from '@/middleware/auth.js';
 import * as applicationService from '@/services/application.service.js';
@@ -19,6 +22,7 @@ import * as tagService from '@/services/tag.service.js';
 import * as coverLetterService from '@/services/cover-letter.service.js';
 import * as interviewPrepService from '@/services/interview-prep.service.js';
 import * as resumeGapService from '@/services/resume-gap.service.js';
+import * as aiService from '@/services/ai.service.js';
 
 const app = new OpenAPIHono<{ Variables: { user: AuthUser } }>();
 
@@ -496,6 +500,136 @@ app.openapi(getResumeGapRoute, async (c) => {
           createdAt: analysis.createdAt.toISOString(),
         };
       })(),
+      error: null,
+    },
+    200,
+  );
+});
+
+// ---- AI Analysis for Application ----
+
+const getAiAnalysisRoute = createRoute({
+  method: 'get',
+  path: '/applications/{id}/ai-analysis',
+  tags: ['Applications', 'AI'],
+  summary: 'Get the most recent AI job analysis for a job application',
+  description: `Returns the most recent completed AI job analysis for the specified application, or \`null\` if none exist yet.
+
+Ownership is verified — users can only access their own applications' analyses.`,
+  security: [{ Bearer: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: JobAnalysisForApplicationSchema.nullable(),
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'AI job analysis result, or null if not yet generated',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            data: z.null(),
+            error: z.string(),
+            errorCode: z.string(),
+          }),
+        },
+      },
+      description: 'Application not found',
+    },
+  },
+});
+
+app.openapi(getAiAnalysisRoute, async (c) => {
+  const userId = c.get('user').id;
+  const { id } = c.req.valid('param');
+  const analysis = await aiService.getJobAnalysisByApplicationId(userId, id);
+  return c.json(
+    {
+      success: true as const,
+      data: (() => {
+        if (!analysis) return null;
+        const parsed = JobAnalysisResultSchema.safeParse(analysis.result);
+        if (!parsed.success) return null;
+        return {
+          id: analysis.id,
+          applicationId: analysis.applicationId,
+          jobId: analysis.jobId,
+          content: parsed.data,
+          createdAt: analysis.createdAt.toISOString(),
+          updatedAt: analysis.updatedAt.toISOString(),
+        };
+      })(),
+      error: null,
+    },
+    200,
+  );
+});
+
+// ---- Tags for Application ----
+
+const getApplicationTagsRoute = createRoute({
+  method: 'get',
+  path: '/applications/{id}/tags',
+  tags: ['Applications', 'Tags'],
+  summary: 'Get tags attached to a job application',
+  description: `Returns all tags attached to the specified application.
+
+Ownership is verified — users can only access their own applications' tags.`,
+  security: [{ Bearer: [] }],
+  request: {
+    params: z.object({ id: z.string().uuid() }),
+  },
+  responses: {
+    200: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(true),
+            data: z.array(TagSchema),
+            error: z.null(),
+          }),
+        },
+      },
+      description: 'Tags attached to the application',
+    },
+    404: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.literal(false),
+            data: z.null(),
+            error: z.string(),
+            errorCode: z.string(),
+          }),
+        },
+      },
+      description: 'Application not found',
+    },
+  },
+});
+
+app.openapi(getApplicationTagsRoute, async (c) => {
+  const userId = c.get('user').id;
+  const { id } = c.req.valid('param');
+  const tagList = await tagService.getTagsForApplication(userId, id);
+  return c.json(
+    {
+      success: true as const,
+      data: tagList.map((t) => ({
+        ...t,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+      })),
       error: null,
     },
     200,

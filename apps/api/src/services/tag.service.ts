@@ -68,6 +68,30 @@ export async function attachTags(userId: string, applicationId: string, tagIds: 
   return { attached: tagIds.length };
 }
 
+export async function getTagsForApplication(userId: string, applicationId: string) {
+  const [app] = await db
+    .select()
+    .from(jobApplications)
+    .where(and(eq(jobApplications.id, applicationId), eq(jobApplications.userId, userId)));
+
+  if (!app) {
+    throw new AppError(404, 'NOT_FOUND', 'Application not found');
+  }
+
+  return db
+    .select({
+      id: tags.id,
+      name: tags.name,
+      color: tags.color,
+      userId: tags.userId,
+      createdAt: tags.createdAt,
+      updatedAt: tags.updatedAt,
+    })
+    .from(tags)
+    .innerJoin(jobApplicationTags, eq(jobApplicationTags.tagId, tags.id))
+    .where(eq(jobApplicationTags.jobApplicationId, applicationId));
+}
+
 export async function removeTag(userId: string, applicationId: string, tagId: string) {
   // Verify application ownership
   const [application] = await db

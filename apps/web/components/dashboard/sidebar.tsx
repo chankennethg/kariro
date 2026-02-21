@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Briefcase, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Briefcase, BarChart3, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/applications', label: 'Applications', icon: Briefcase },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
+  { href: '/dashboard/profile', label: 'Profile', icon: User },
 ] as const;
 
 export function Sidebar() {

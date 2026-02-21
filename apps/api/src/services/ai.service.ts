@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import type {
   AnalyzeJobRequest,
   JobAnalysisResult,
@@ -8,7 +8,7 @@ import type {
   ResumeGapRequest,
 } from '@kariro/shared';
 import { db } from '@/db/index.js';
-import { aiAnalyses, coverLetters, interviewPreps, resumeGapAnalyses } from '@/db/schema/tables.js';
+import { aiAnalyses, coverLetters, interviewPreps, resumeGapAnalyses, jobApplications } from '@/db/schema/tables.js';
 import { aiQueue } from '@/lib/queue.js';
 import { AppError } from '@/middleware/error.js';
 import * as applicationService from './application.service.js';
@@ -190,6 +190,33 @@ export async function enqueueResumeGapJob(userId: string, data: ResumeGapRequest
   return insertAndEnqueue(userId, data.applicationId, 'resume-gap', 'resume-gap', {
     applicationId: data.applicationId,
   });
+}
+
+export async function getJobAnalysisByApplicationId(userId: string, applicationId: string) {
+  const [app] = await db
+    .select()
+    .from(jobApplications)
+    .where(and(eq(jobApplications.id, applicationId), eq(jobApplications.userId, userId)));
+
+  if (!app) {
+    throw new AppError(404, 'NOT_FOUND', 'Application not found');
+  }
+
+  const [analysis] = await db
+    .select()
+    .from(aiAnalyses)
+    .where(
+      and(
+        eq(aiAnalyses.applicationId, applicationId),
+        eq(aiAnalyses.userId, userId),
+        eq(aiAnalyses.type, 'analyze-job'),
+        eq(aiAnalyses.status, 'completed'),
+      ),
+    )
+    .orderBy(desc(aiAnalyses.createdAt))
+    .limit(1);
+
+  return analysis ?? null;
 }
 
 export async function saveAnalysisResult(
